@@ -74,10 +74,17 @@ activity, or `adb shell` an app that calls `speak()`.
 
 ## Known gaps / next steps
 
-- **Not yet run on-device** — verify load + synthesis, then iterate.
-- **arm64 only.** An `android-x86_64` target (for x86_64 emulators) is easy to
-  add: x86_64 Android uses the SysV variadic ABI, so none of the arm64 shims are
-  needed — just a config entry with the x86_64 NDK clang and 4 KB pages.
+- **Engine validated on Bionic (arm64).** The converted arm64 engine has been
+  run under a real Bionic `linker64` (via qemu-user) and synthesizes audio
+  byte-near-identical to the Linux build. The full APK installs on an x86_64
+  Android 14 emulator and registers as a selectable system TTS engine.
+- **`android-x86_64` is experimental and currently crashes at runtime.** The
+  x86_64 build is symbol-complete and `eciVersion` works, but `eciNew` hits an
+  uninitialised engine object (NULL function-pointer call) — uniquely on the
+  x86_64+Bionic combination (arm64+Bionic and x86_64+glibc both work). Root
+  cause not yet pinned; debugging it in Android Studio (GUI lldb, symbol
+  handling) is the most efficient path. Until then the APK ships **arm64-v8a
+  only**, so test on an arm64 device/emulator.
 - **Streaming.** `nativeSynthesize` buffers the whole utterance; for long text,
   switch to chunked delivery (the ECI callback already arrives in chunks).
 - **Voice/prosody mapping** is approximate (`onSynthesizeText`); tune against the

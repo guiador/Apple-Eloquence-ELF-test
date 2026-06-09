@@ -5,6 +5,35 @@ All notable changes to apple-eloquence-elf are recorded here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Experimental `android-x86_64` converter target** (`--os android` on an
+  x86_64 slice). Simpler than arm64 — x86_64 Android uses the SysV ABI, so no
+  variadic/`__chkstk` shims; only the Bionic bits apply (libc++ `__ndk1`
+  rewrite, `bzero`/`ftime` stubs, `__errno`, `libunwind`). All 19 modules build
+  and are **symbol-complete**. Off by default in the APK (`abiFilters` stays
+  arm64-v8a) — see Known issue.
+
+### Verified
+
+- **On-device/emulator testing of the Android build.** Brought up a
+  KVM-accelerated **x86_64 Android 14 emulator**; the **APK installs and
+  registers as a selectable system TTS engine**. Separately, ran the converted
+  **arm64** engine under a real Bionic `linker64` (qemu-user): it loads and
+  synthesizes audio byte-near-identical to Linux. (This is what surfaced the
+  1.2.3 phdr fix.)
+
+### Known issue
+
+- **`android-x86_64`: `eciNew` crashes at runtime** (NULL function-pointer call
+  — an engine object is reached uninitialised, an init step skipped). Unique to
+  the x86_64+Bionic combination; arm64+Bionic and x86_64+glibc both synthesize
+  correctly. Not a symbol/relocation problem (runtime resolution is clean). Root
+  cause not yet pinned (needs single-stepping the stripped engine). arm64
+  remains the validated, shipped target.
+
 ## [1.2.3] — 2026-06-09
 
 ### Fixed

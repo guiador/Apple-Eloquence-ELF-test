@@ -17,9 +17,12 @@ android {
         versionName = "0.1.0"
 
         ndk {
-            // Only arm64 is converted/validated today. x86_64 (emulator) would
-            // need an "android-x86_64" ARCH_CONFIG entry — simpler than arm64,
-            // since x86_64 Android shares the SysV variadic ABI (no shims).
+            // arm64-v8a only by default — it's the validated target (engine
+            // synthesizes correctly under Bionic). The converter can also emit
+            // x86_64 (`--os android` on an x86_64 slice; ARCH_CONFIG has an
+            // "android-x86_64" entry) for emulator testing, but that build has
+            // an unresolved eciNew init crash — see android/README.md. Add
+            // "x86_64" here once that's fixed.
             abiFilters += "arm64-v8a"
         }
         externalNativeBuild {
