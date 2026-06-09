@@ -1073,6 +1073,35 @@ ARCH_CONFIG = {
         "stub_libs":  ["libc++_shared.so"],
         "page_size":  0x4000,
     },
+    # Android/x86_64 (Bionic) — for x86_64 emulators. SIMPLER than arm64: Apple
+    # and Android x86_64 both follow the System V AMD64 ABI, so NONE of the
+    # arm64 shims apply (the variadic trampolines and __chkstk_darwin are gated
+    # on a target ending in "arm64"; __chkstk_darwin isn't even imported on
+    # x86_64). The Bionic bits still apply (they key on "android"): the libc++
+    # __ndk1 namespace rewrite, bzero/ftime compat stubs, __errno rename, and
+    # -lunwind for _Unwind_Resume. 4 KB pages like desktop x86_64.
+    #
+    # EXPERIMENTAL / KNOWN ISSUE: all 19 modules build and are symbol-complete,
+    # and eci.so loads + eciVersion works under Android x86_64 (verified on a
+    # KVM emulator, Android 14). But eciNew currently crashes: an engine object
+    # is reached uninitialised (NULL function-pointer call), i.e. an init step
+    # is skipped — uniquely on the x86_64+Bionic combination (arm64+Bionic and
+    # x86_64+glibc both work). Not a symbol/reloc problem (runtime resolution is
+    # clean). Root cause not yet pinned; needs single-stepping the stripped
+    # engine. arm64 is the validated, shipped target.
+    "android-x86_64": {
+        "elf_format": "elf64-x86-64",
+        "elf_arch":   "i386:x86-64",
+        "gcc":        "x86_64-linux-android24-clang",
+        "link_libs":  ["-Wl,--unresolved-symbols=ignore-all",
+                       "-lc", "-lm", "-ldl",
+                       "-Wl,--no-as-needed",
+                       "{STUB}libc++_shared.so",
+                       "-Wl,--as-needed",
+                       "-lunwind"],
+        "stub_libs":  ["libc++_shared.so"],
+        "page_size":  0x1000,
+    },
 }
 
 
