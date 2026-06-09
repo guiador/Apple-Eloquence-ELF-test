@@ -676,8 +676,15 @@ def emit_linker_script(binary, sections, lds_path, arch_cfg=None):
         add("OUTPUT_FORMAT(elf64-x86-64)")
         add("OUTPUT_ARCH(i386:x86-64)")
     add("")
+    # FILEHDR PHDRS on the first PT_LOAD (+ a PT_PHDR) place the ELF header and
+    # program-header table INSIDE a loaded segment. glibc's loader tolerates
+    # phdrs that sit before the first PT_LOAD; Android's Bionic linker does not
+    # ("can't find loaded phdr") and refuses to dlopen the library. Mach-O always
+    # leaves a gap below __text (it held the mach header + load commands), so
+    # there's room for the ELF headers at vaddr 0 ahead of the pinned sections.
     add("PHDRS {")
-    add("    text     PT_LOAD       FLAGS(5);  /* R-X (Mach-O __TEXT) */")
+    add("    phdrs    PT_PHDR       PHDRS;")
+    add("    text     PT_LOAD       FILEHDR PHDRS FLAGS(5);  /* R-X (Mach-O __TEXT) */")
     add("    rwdata   PT_LOAD       FLAGS(6);  /* RW- (Mach-O __DATA*) */")
     add("    auxtext  PT_LOAD       FLAGS(5);  /* R-X (linker-auto .plt/.text from stubs.c) */")
     add("    dynamic  PT_DYNAMIC    FLAGS(6);")

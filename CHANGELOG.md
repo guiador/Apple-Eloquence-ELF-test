@@ -5,7 +5,20 @@ All notable changes to apple-eloquence-elf are recorded here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.3] — 2026-06-09
+
+### Fixed
+
+- **Converted `.so` files now load under Android's Bionic linker** (and are more
+  standard ELF generally). The ELF header + program-header table used to sit
+  *before* the first `PT_LOAD` segment; glibc's loader tolerates that, but
+  Bionic refuses with *"can't find loaded phdr"* and won't `dlopen` the library.
+  The linker script now puts `FILEHDR PHDRS` in the first `PT_LOAD` (+ a
+  `PT_PHDR`), placing the headers inside a loaded segment — there's always room
+  in the gap Mach-O leaves below `__text`. Verified by running the converted
+  engine under a real Bionic `linker64` (via qemu-user): it loads and
+  synthesizes audio **byte-near-identical to the Linux build** (same sample
+  count; ≤3/19000 deviation from FP rounding). Linux x86_64/arm64 unaffected.
 
 ### Added
 
