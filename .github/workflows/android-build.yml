@@ -17,29 +17,26 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Instalar dependencias del sistema y LIEF
+    - name: Instalar dependencias del sistema
       run: |
         sudo apt-get update
         sudo apt-get install -y llvm python3-pip python3-venv
-        # Enlazar llvm-lipo para el script de extracción
         LIPO=$(ls /usr/bin/llvm-lipo-* 2>/dev/null | sort -V | tail -1)
         if [ ! -z "$LIPO" ]; then sudo ln -sf "$LIPO" /usr/local/bin/llvm-lipo; fi
-        # Crear entorno de Python e instalar la herramienta LIEF
         python3 -m venv venv
         ./venv/bin/pip install --upgrade pip
         ./venv/bin/pip install lief
 
     - name: Instalar Android NDK r27c
       run: |
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
+        yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses
+        ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
 
-    - name: Convertir y preparar librerías nativas (stage-libs.sh)
-      env:
-        ANDROID_NDK: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+    - name: Convertir y preparar librerías nativas
       run: |
+        export ANDROID_NDK="${ANDROID_HOME}/ndk/27.2.12479018"
         chmod +x ./android/stage-libs.sh
-        PATH="$GITHUB_WORKSPACE/venv/bin:$PATH" ./android/stage-libs.sh 24
+        PATH="${GITHUB_WORKSPACE}/venv/bin:$PATH" ./android/stage-libs.sh 24
 
     - name: Compilar APK de depuración
       working-directory: ./android
