@@ -5,47 +5,64 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout del código
       uses: actions/checkout@v4
 
-    - name: Configurar Java JDK
+    - name: Configurar Java JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Instalar dependencias del sistema
+    - name: Configurar Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Instalar LIEF y herramientas nativas
       run: |
+        python -m pip install --upgrade pip
+        pip install lief
         sudo apt-get update
-        sudo apt-get install -y llvm python3-pip python3-venv
+        sudo apt-get install -y llvm
         LIPO=$(ls /usr/bin/llvm-lipo-* 2>/dev/null | sort -V | tail -1)
         if [ ! -z "$LIPO" ]; then sudo ln -sf "$LIPO" /usr/local/bin/llvm-lipo; fi
-        python3 -m venv venv
-        ./venv/bin/pip install --upgrade pip
-        ./venv/bin/pip install lief
 
-    - name: Instalar Android NDK r27c
+    - name: Aceptar licencias e instalar Android NDK r27c
       run: |
-        yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses
-        ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
+        echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses
+        echo "y" | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
 
-    - name: Convertir y preparar librerías nativas
+    - name: Generar firma de depuracion manual
+      run: |
+        mkdir -p ~/.android
+        keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+
+    - name: Convertir librerias de Apple
       run: |
         export ANDROID_NDK="${ANDROID_HOME}/ndk/27.2.12479018"
         chmod +x ./android/stage-libs.sh
-        PATH="${GITHUB_WORKSPACE}/venv/bin:$PATH" ./android/stage-libs.sh 24
+        ./android/stage-libs.sh 24
 
-    - name: Compilar APK de depuración
+    - name: Compilar APK y capturar registro
       working-directory: ./android
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --stacktrace > build_log.txt 2>&1
 
-    - name: Subir APK como artefacto
+    - name: Subir APK exitoso
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-apk
         path: android/app/build/outputs/apk/debug/*.apk
+
+    - name: Subir registro de error
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: reporte-de-error-gradle
+        path: android/build_log.txt
