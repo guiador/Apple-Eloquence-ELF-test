@@ -2,7 +2,7 @@
 
 Base: Mudb0y/Apple-Eloquence-ELF, `main`, commit `12cf68ad4aba0841900dafcdd34876101e0913db` (1.3.0), descargado el 12 de octubre de 2026.
 
-El motor, convertidor y JNI conservan la versión del padre. Esta variante añade una pantalla de pruebas con controles Android estándar, integración CHECK_TTS_DATA/GET_SAMPLE_TEXT y extracción de bibliotecas a nativeLibraryDir para que las rutas de eci.ini correspondan a archivos instalados.
+El motor procede de la versión 1.3.0 del padre. Esta variante añade una pantalla de pruebas con controles Android estándar, integración CHECK_TTS_DATA/GET_SAMPLE_TEXT y extracción de bibliotecas a nativeLibraryDir. Las pruebas reales requirieron corregir la carga de libeci.so en JNI, acortar las rutas de eci.ini y añadir al convertidor adaptadores para los búferes setjmp/longjmp y las constantes pthread de Darwin frente a Bionic. No se desactivó la protección de pila ni se sustituyó el motor.
 
 CheckVoiceDataActivity y GetSampleTextActivity se adaptaron de la copia local de Free Eloquence TTS, cuyo archivo LICENSE declara MIT, Copyright 2026 Quin Gillespie; se conserva en `TEST-BUILD-LICENSE-FreeEloquence.txt`. El acceso a ajustes sigue su patrón de intentar los ajustes TTS, accesibilidad y ajustes generales. Se mantienen también las condiciones MIT/GPL y avisos del padre, incluido el código GPL-2.0-or-later del puente CJK; los binarios de Apple mantienen sus condiciones originales. Esta adaptación no atribuye el motor a Guillermo ni a Codex.
 
