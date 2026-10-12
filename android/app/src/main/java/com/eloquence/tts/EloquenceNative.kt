@@ -19,11 +19,11 @@ object EloquenceNative {
      */
     external fun nativeInit(dataDir: String, dialect: Int): Long
 
-    /** Set speed/pitch/volume; pass -1 to leave a field unchanged. */
-    external fun nativeSetProsody(handle: Long, rate: Int, pitch: Int, volume: Int)
+    /** Apply all eight ECI voice parameters to the active slot. */
+    external fun nativeSetVoice(handle: Long, parameters: IntArray): Boolean
 
     /** Synthesize one utterance -> 11025 Hz mono S16 PCM, or null on abort. */
-    external fun nativeSynthesize(handle: Long, text: String): ShortArray?
+    external fun nativeSynthesize(handle: Long, text: ByteArray): ShortArray?
 
     /** Abort the in-flight utterance (called from onStop). */
     external fun nativeStop(handle: Long)

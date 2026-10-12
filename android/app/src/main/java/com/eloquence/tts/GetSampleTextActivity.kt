@@ -12,7 +12,7 @@ class GetSampleTextActivity : Activity() {
         super.onCreate(savedInstanceState)
         val requested = intent.getStringExtra("language")
         val sample = if (requested == "spa" || requested == "es")
-            "Esta es una prueba de Apple Eloquence en Android." else "This is a test of Apple Eloquence on Android."
+            "El niño pidió café. Mañana hablará español: á, é, í, ó, ú, ñ y ü." else "This is a test of Apple Eloquence on Android."
         setResult(TextToSpeech.LANG_AVAILABLE, Intent().putExtra(TextToSpeech.Engine.EXTRA_SAMPLE_TEXT, sample))
         finish()
     }

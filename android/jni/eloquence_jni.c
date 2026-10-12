@@ -153,35 +153,49 @@ Java_com_eloquence_tts_EloquenceNative_nativeInit(JNIEnv *env, jclass clazz,
     return (jlong)(intptr_t)e;
 }
 
-JNIEXPORT void JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeSetProsody(JNIEnv *env, jclass c,
-        jlong handle, jint rate, jint pitch, jint volume) {
-    (void)env; (void)c;
+JNIEXPORT jboolean JNICALL
+Java_com_eloquence_tts_EloquenceNative_nativeSetVoice(JNIEnv *env, jclass c,
+        jlong handle, jintArray parameters) {
+    (void)c;
     Engine *e = (Engine *)(intptr_t)handle;
-    if (!e || !e->SetVoiceParam) return;
-    if (rate   >= 0) e->SetVoiceParam(e->eci, 0, eciSpeed,        rate);
-    if (pitch  >= 0) e->SetVoiceParam(e->eci, 0, eciPitchBaseline, pitch);
-    if (volume >= 0) e->SetVoiceParam(e->eci, 0, eciVolume,       volume);
+    if (!e || !e->SetVoiceParam || !parameters ||
+        (*env)->GetArrayLength(env, parameters) != 8) return JNI_FALSE;
+    jint values[8];
+    (*env)->GetIntArrayRegion(env, parameters, 0, 8, values);
+    if ((*env)->ExceptionCheck(env)) return JNI_FALSE;
+    for (int i = 0; i < 8; ++i) {
+        int max = i == 0 ? 1 : (i == 6 ? 250 : 100);
+        if (values[i] < 0 || values[i] > max) return JNI_FALSE;
+    }
+    for (int i = 0; i < 8; ++i)
+        if (e->SetVoiceParam(e->eci, 0, i, values[i]) < 0) return JNI_FALSE;
+    return JNI_TRUE;
 }
 
 /* Synthesize one utterance synchronously; return PCM as a short[] (11025 Hz,
  * mono, S16). Returns null on failure/abort. */
 JNIEXPORT jshortArray JNICALL
 Java_com_eloquence_tts_EloquenceNative_nativeSynthesize(JNIEnv *env, jclass c,
-        jlong handle, jstring jText) {
+        jlong handle, jbyteArray jText) {
     (void)c;
     Engine *e = (Engine *)(intptr_t)handle;
-    if (!e) return NULL;
-    const char *text = (*env)->GetStringUTFChars(env, jText, NULL);
+    if (!e || !jText) return NULL;
+    jsize length = (*env)->GetArrayLength(env, jText);
+    char *text = (char *)malloc((size_t)length + 1);
+    if (!text) return NULL;
+    (*env)->GetByteArrayRegion(env, jText, 0, length, (jbyte *)text);
+    if ((*env)->ExceptionCheck(env)) { free(text); return NULL; }
+    text[length] = '\0';
 
     e->pcm_len = 0;
     e->abort = 0;
-    e->AddText(e->eci, (ECIInputText)text);
-    e->Synthesize(e->eci);
+    if (!e->AddText(e->eci, (ECIInputText)text) || !e->Synthesize(e->eci)) {
+        free(text); return NULL;
+    }
     if (e->Synchronize) e->Synchronize(e->eci);
     /* Apple's Synchronize is non-blocking; drain the worker thread. */
     if (e->Speaking) { int guard = 0; while (e->Speaking(e->eci) && !e->abort && guard++ < 100000) usleep(1000); }
-    (*env)->ReleaseStringUTFChars(env, jText, text);
+    free(text);
 
     if (e->abort || e->pcm_len == 0) return NULL;
     jshortArray out = (*env)->NewShortArray(env, (jsize)e->pcm_len);

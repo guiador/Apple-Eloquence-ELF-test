@@ -26,6 +26,8 @@ import android.util.Log
 import android.system.Os
 import android.system.ErrnoException
 import java.io.File
+import java.util.Locale
+import android.speech.tts.Voice as AndroidVoice
 
 private const val TAG = "EloquenceTts"
 private const val SAMPLE_RATE = 11025
@@ -62,10 +64,12 @@ class EloquenceTtsService : TextToSpeechService() {
     private var handle: Long = 0
     private var currentDialect: Int = 0
     private val lock = Any()
+    private lateinit var settings: VoiceSettings
 
     override fun onCreate() {
         // Engine + eci.ini must exist before the base class wires up languages.
         writeEciIni()
+        settings = VoiceSettings(this)
         ensureEngine(VOICES.first().dialect)
         super.onCreate()
     }
@@ -81,8 +85,8 @@ class EloquenceTtsService : TextToSpeechService() {
 
     private fun match(lang: String?, country: String?): Voice? {
         if (lang == null) return null
-        VOICES.firstOrNull { it.iso3Lang == lang && it.iso3Country == country }?.let { return it }
-        return VOICES.firstOrNull { it.iso3Lang == lang } // language-only fallback
+        VOICES.firstOrNull { it.romanizer == null && it.iso3Lang == lang && it.iso3Country == country }?.let { return it }
+        return VOICES.firstOrNull { it.romanizer == null && it.iso3Lang == lang } // Western modules only: cp1252
     }
 
     override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int {
@@ -100,26 +104,68 @@ class EloquenceTtsService : TextToSpeechService() {
 
     override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int {
         val v = match(lang, country) ?: return TextToSpeech.LANG_NOT_SUPPORTED
-        synchronized(lock) { ensureEngine(v.dialect) }
+        synchronized(lock) { if (!ensureEngine(v.dialect)) return TextToSpeech.LANG_NOT_SUPPORTED }
         return onIsLanguageAvailable(lang, country, variant)
+    }
+
+    private fun tagFor(v: Voice): String = VoiceCatalog.tags.first {
+        val locale = Locale.forLanguageTag(it)
+        locale.isO3Language == v.iso3Lang && locale.isO3Country == v.iso3Country
+    }
+
+    private fun namedVoice(name: String?): Pair<String, Int>? {
+        VoiceCatalog.parse(name)?.let { return it }
+        // Accept the old locale-only names for clients retaining the previous APK's voices.
+        if (name in VoiceCatalog.tags) return name!! to settings.profile(name)
+        return null
+    }
+
+    override fun onGetVoices(): MutableList<AndroidVoice> = VoiceCatalog.tags.flatMap { tag ->
+        VoiceCatalog.presets.indices.map { profile ->
+            AndroidVoice(VoiceCatalog.id(tag, profile), Locale.forLanguageTag(tag),
+                AndroidVoice.QUALITY_NORMAL, AndroidVoice.LATENCY_NORMAL, false, emptySet())
+        }
+    }.toMutableList()
+
+    override fun onIsValidVoiceName(voiceName: String?): Int =
+        if (namedVoice(voiceName) != null) TextToSpeech.SUCCESS else TextToSpeech.ERROR
+
+    override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String? {
+        val tag = match(lang, country)?.let { tagFor(it) } ?: return null
+        return VoiceCatalog.id(tag, settings.profile(tag))
+    }
+
+    override fun onLoadVoice(voiceName: String?): Int {
+        val (tag, _) = namedVoice(voiceName) ?: return TextToSpeech.ERROR
+        val locale = Locale.forLanguageTag(tag)
+        val v = match(locale.isO3Language, locale.isO3Country) ?: return TextToSpeech.ERROR
+        return synchronized(lock) { if (ensureEngine(v.dialect)) TextToSpeech.SUCCESS else TextToSpeech.ERROR }
     }
 
     // --- synthesis ---------------------------------------------------------
 
     override fun onSynthesizeText(request: SynthesisRequest, callback: SynthesisCallback) {
-        val v = match(request.language, request.country)
+        val selected = namedVoice(request.voiceName)
+        if (!request.voiceName.isNullOrEmpty() && selected == null) { callback.error(); return }
+        val requestedLocale = selected?.first?.let { Locale.forLanguageTag(it) }
+        val v = match(requestedLocale?.isO3Language ?: request.language,
+            requestedLocale?.isO3Country ?: request.country)
         if (v == null) { callback.error(); return }
 
         val text = request.charSequenceText?.toString().orEmpty()
         synchronized(lock) {
             if (!ensureEngine(v.dialect)) { callback.error(); return }
-            // Android speechRate/pitch are percent (100 = normal). Map to ECI:
-            // eciSpeed 0..250 (≈50 normal); eciPitchBaseline ≈69 normal.
-            val rate = (request.speechRate * 50 / 100).coerceIn(0, 250)
-            val pitch = (69 * request.pitch / 100).coerceIn(0, 100)
-            EloquenceNative.nativeSetProsody(handle, rate, pitch, -1)
+            val tag = tagFor(v)
+            val profile = selected?.second ?: settings.profile(tag)
+            // A client's 100% rate/pitch preserves the chosen profile/custom defaults.
+            val parameters = VoiceCatalog.prosody(settings.parameters(tag, profile),
+                request.speechRate, request.pitch)
+            if (!EloquenceNative.nativeSetVoice(handle, parameters)) {
+                Log.e(TAG, "Engine rejected voice parameters")
+                callback.error(); return
+            }
 
-            val pcm = EloquenceNative.nativeSynthesize(handle, text)
+            val pcm = EloquenceNative.nativeSynthesize(handle, TextCodec.encode(text))
             if (pcm == null) { callback.error(); return }
             deliver(pcm, callback)
         }
@@ -130,8 +176,8 @@ class EloquenceTtsService : TextToSpeechService() {
     }
 
     private fun deliver(pcm: ShortArray, callback: SynthesisCallback) {
-        callback.start(SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1)
-        val maxBytes = callback.maxBufferSize.coerceAtLeast(2)
+        if (callback.start(SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1) != TextToSpeech.SUCCESS) return
+        val maxBytes = callback.maxBufferSize.coerceAtLeast(2).let { it - it % 2 }
         val bytes = ByteArray(pcm.size * 2)
         for (i in pcm.indices) {
             bytes[i * 2]     = (pcm[i].toInt() and 0xFF).toByte()
@@ -140,7 +186,7 @@ class EloquenceTtsService : TextToSpeechService() {
         var off = 0
         while (off < bytes.size) {
             val n = minOf(maxBytes, bytes.size - off)
-            if (callback.audioAvailable(bytes, off, n) != TextToSpeech.SUCCESS) break
+            if (callback.audioAvailable(bytes, off, n) != TextToSpeech.SUCCESS) { callback.error(); return }
             off += n
         }
         callback.done()

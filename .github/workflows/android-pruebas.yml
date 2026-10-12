@@ -31,7 +31,7 @@ jobs:
           bash android/stage-libs.sh 24
       - name: Compilar APK y comprobar manifiesto
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug :app:lintDebug --stacktrace
+        run: gradle --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest --stacktrace
       - name: Verificar firma y arquitectura
         run: |
           APK=android/app/build/outputs/apk/debug/app-debug.apk
@@ -49,8 +49,11 @@ jobs:
             SHA256.txt
             TEST-BUILD-NOTICES.md
             TEST-BUILD-LICENSE-FreeEloquence.txt
+            sd_eloquence/LICENSE.GPL
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: informes-Android
-          path: android/app/build/reports/
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
