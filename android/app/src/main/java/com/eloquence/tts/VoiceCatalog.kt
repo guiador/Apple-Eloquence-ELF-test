@@ -24,7 +24,6 @@ object VoiceCatalog {
         VoicePreset("Eddy", listOf(0, 50, 69, 34, 0, 0, 50, 92)),
     )
     val tags = listOf("es-ES", "es-MX", "en-US", "en-GB", "fr-FR", "fr-CA", "de-DE", "it-IT", "pt-BR", "fi-FI")
-    val languageNames = listOf("Español de España", "Español de México", "Inglés de Estados Unidos", "Inglés británico", "Francés de Francia", "Francés canadiense", "Alemán", "Italiano", "Portugués de Brasil", "Finés")
     fun id(tag: String, profile: Int) = "apple:$tag:${presets[profile].name}"
     fun parse(voiceId: String?): Pair<String, Int>? {
         if (voiceId == null) return null

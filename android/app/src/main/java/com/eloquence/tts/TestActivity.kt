@@ -12,6 +12,7 @@ import android.text.InputType
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
+import java.util.Locale
 
 /** Accessible native controls for testing and saving per-language voice settings. */
 class TestActivity : Activity(), TextToSpeech.OnInitListener {
@@ -28,10 +29,11 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
     private var languageTag = "es-ES"
     private var selectedProfile = 0
     private var loading = false
+    private var lastSample = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "Apple Eloquence: voces y ajustes"
+        title = getString(R.string.activity_title)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         settings = VoiceSettings(this)
         languageTag = settings.language()
@@ -47,51 +49,55 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
             column.addView(target, LinearLayout.LayoutParams(-1, -2))
         }
         column.addView(TextView(this).apply {
-            setText("Elige una voz, ajusta sus parámetros y prueba la lectura. Los ajustes se guardan para cada idioma y perfil.")
+            setText(R.string.introduction)
         })
         language = Spinner(this).apply {
-            adapter = ArrayAdapter(this@TestActivity, android.R.layout.simple_spinner_dropdown_item, VoiceCatalog.languageNames)
+            adapter = ArrayAdapter(this@TestActivity, android.R.layout.simple_spinner_dropdown_item,
+                VoiceCatalog.tags.map { Locale.forLanguageTag(it).getDisplayName(resources.configuration.locales[0]) })
         }
-        label("Idioma", language)
+        label(getString(R.string.language), language)
         profile = Spinner(this)
-        label("Perfil de voz", profile)
+        label(getString(R.string.voice_profile), profile)
         text = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             minLines = 3
-            setText("El niño pidió café. Mañana hablará español. Pingüino, canción, árbol: á, é, í, ó, ú, ñ y ü.")
+            lastSample = LocalizedSamples.forTag(this@TestActivity, languageTag)
+            setText(lastSample)
         }
-        label("Texto de prueba", text)
+        label(getString(R.string.test_text), text)
         speak = Button(this).apply {
-            setText("Leer texto")
+            setText(R.string.read_text)
             isEnabled = false
             setOnClickListener { readText() }
         }
         column.addView(speak)
         column.addView(Button(this).apply {
-            setText("Detener lectura")
-            setOnClickListener { tts?.stop(); status.text = "Lectura detenida" }
+            setText(R.string.stop_reading)
+            setOnClickListener { tts?.stop(); status.setText(R.string.reading_stopped) }
         })
         status = TextView(this).apply {
-            text = "Inicializando el motor…"
+            setText(R.string.initializing)
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             isFocusable = true
         }
         column.addView(status)
         column.addView(Button(this).apply {
-            setText("Restablecer valores del perfil")
-            setOnClickListener { settings.reset(languageTag, selectedProfile); loadControls(); status.text = "Valores originales del perfil restaurados" }
+            setText(R.string.reset_profile)
+            setOnClickListener { settings.reset(languageTag, selectedProfile); loadControls(); status.setText(R.string.profile_reset) }
         })
         column.addView(Button(this).apply {
-            setText("Abrir ajustes de texto a voz del sistema")
+            setText(R.string.open_system_settings)
             setOnClickListener { openSpeechSettings() }
         })
         gender = Spinner(this).apply {
-            adapter = ArrayAdapter(this@TestActivity, android.R.layout.simple_spinner_dropdown_item, listOf("Masculino", "Femenino"))
+            adapter = ArrayAdapter(this@TestActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf(getString(R.string.male), getString(R.string.female)))
         }
-        label("Género de la voz", gender)
-        val captions = linkedMapOf(6 to "Velocidad", 2 to "Tono", 7 to "Volumen de la voz",
-            1 to "Tamaño de cabeza (timbre)", 3 to "Variación tonal", 4 to "Aspereza", 5 to "Aire en la voz")
-        for ((parameter, caption) in captions) {
+        label(getString(R.string.voice_gender), gender)
+        val captions = linkedMapOf(6 to R.string.speed, 2 to R.string.pitch, 7 to R.string.voice_volume,
+            1 to R.string.head_size, 3 to R.string.pitch_variation, 4 to R.string.roughness, 5 to R.string.breathiness)
+        for ((parameter, captionResource) in captions) {
+            val caption = getString(captionResource)
             val value = TextView(this)
             values[parameter] = value
             column.addView(value)
@@ -101,7 +107,7 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
                 contentDescription = caption
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                        value.text = "$caption: $progress de $max"
+                        value.text = getString(R.string.parameter_value, caption, progress, max)
                         if (!loading) settings.set(languageTag, selectedProfile, parameter, progress)
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -112,20 +118,20 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
             bars[parameter] = bar
             column.addView(bar, LinearLayout.LayoutParams(-1, -2))
             column.addView(LinearLayout(this).apply {
-                for ((delta, action) in listOf(-1 to "Disminuir", 1 to "Aumentar")) {
+                for (delta in listOf(-1, 1)) {
                     addView(Button(this@TestActivity).apply {
-                        setText(if (delta < 0) "−" else "+")
-                        contentDescription = "$action $caption"
+                        setText(if (delta < 0) R.string.decrease_symbol else R.string.increase_symbol)
+                        contentDescription = getString(if (delta < 0) R.string.decrease_parameter else R.string.increase_parameter, caption)
                         setOnClickListener {
                             bar.progress = (bar.progress + delta).coerceIn(0, bar.max)
-                            bar.announceForAccessibility("$caption: ${bar.progress}")
+                            bar.announceForAccessibility(getString(R.string.parameter_announcement, caption, bar.progress))
                         }
                     }, LinearLayout.LayoutParams(0, -2, 1f))
                 }
             })
         }
         column.addView(TextView(this).apply {
-            setText("Velocidad: 0 a 250. Otros parámetros: 0 a 100. Los valores extremos pueden sonar poco naturales. Las funciones avanzadas y los textos largos siguen en pruebas.")
+            setText(R.string.parameter_limits)
         })
         setContentView(ScrollView(this).apply { addView(column) })
         loading = true
@@ -138,6 +144,9 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
             if (!loading && chosen != languageTag) {
                 tts?.stop()
                 languageTag = chosen
+                val sample = LocalizedSamples.forTag(this@TestActivity, languageTag)
+                if (text.text.toString() == lastSample) text.setText(sample)
+                lastSample = sample
                 selectedProfile = settings.profile(languageTag)
                 settings.selectLanguage(languageTag)
                 loading = true
@@ -180,40 +189,40 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
             bar.progress = parameters[parameter]
             // A same-value setProgress doesn't dispatch a callback on Android.
             val caption = bar.contentDescription.toString()
-            values[parameter]?.text = "$caption: ${parameters[parameter]} de ${bar.max}"
+            values[parameter]?.text = getString(R.string.parameter_value, caption, parameters[parameter], bar.max)
         }
         loading = false
     }
 
     override fun onInit(result: Int) {
-        if (result != TextToSpeech.SUCCESS) { status.text = "No se pudo iniciar el motor"; return }
+        if (result != TextToSpeech.SUCCESS) { status.setText(R.string.engine_failed); return }
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(id: String?) { runOnUiThread { status.text = "Leyendo" } }
-            override fun onDone(id: String?) { runOnUiThread { status.text = "Lectura terminada" } }
+            override fun onStart(id: String?) { runOnUiThread { status.setText(R.string.reading) } }
+            override fun onDone(id: String?) { runOnUiThread { status.setText(R.string.reading_finished) } }
             @Deprecated("Android legacy callback")
-            override fun onError(id: String?) { runOnUiThread { status.text = "El motor no pudo sintetizar el texto o rechazó un parámetro" } }
+            override fun onError(id: String?) { runOnUiThread { status.setText(R.string.synthesis_failed) } }
         })
         speak.isEnabled = true
-        status.text = "Motor conectado. Elige una voz y pulsa Leer texto."
+        status.setText(R.string.engine_ready)
     }
 
     private fun readText() {
         val engine = tts ?: return
         val message = text.text.toString()
-        if (message.isBlank()) { text.error = "Escribe un texto"; text.requestFocus(); return }
+        if (message.isBlank()) { text.error = getString(R.string.enter_text); text.requestFocus(); return }
         val voice = engine.voices?.firstOrNull { it.name == VoiceCatalog.id(languageTag, selectedProfile) }
-        if (voice == null || engine.setVoice(voice) < 0) { status.text = "Perfil no disponible"; return }
+        if (voice == null || engine.setVoice(voice) < 0) { status.setText(R.string.profile_unavailable); return }
         engine.setSpeechRate(1f)
         engine.setPitch(1f)
         if (engine.speak(message, TextToSpeech.QUEUE_FLUSH, Bundle(), "prueba") == TextToSpeech.ERROR)
-            status.text = "No se pudo iniciar la lectura"
+            status.setText(R.string.reading_failed)
     }
 
     private fun openSpeechSettings() {
         for (action in listOf("com.android.settings.TTS_SETTINGS", Settings.ACTION_ACCESSIBILITY_SETTINGS, Settings.ACTION_SETTINGS)) {
             try { startActivity(Intent(action)); return } catch (_: ActivityNotFoundException) { }
         }
-        status.text = "No se pudieron abrir los ajustes del sistema"
+        status.setText(R.string.settings_failed)
     }
     override fun onStop() { tts?.stop(); super.onStop() }
     override fun onDestroy() { tts?.shutdown(); tts = null; super.onDestroy() }

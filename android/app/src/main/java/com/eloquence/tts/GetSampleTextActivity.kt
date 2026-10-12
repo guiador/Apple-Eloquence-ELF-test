@@ -6,14 +6,24 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import java.util.Locale
 
 class GetSampleTextActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val requested = intent.getStringExtra("language")
-        val sample = if (requested == "spa" || requested == "es")
-            "El niño pidió café. Mañana hablará español: á, é, í, ó, ú, ñ y ü." else "This is a test of Apple Eloquence on Android."
-        setResult(TextToSpeech.LANG_AVAILABLE, Intent().putExtra(TextToSpeech.Engine.EXTRA_SAMPLE_TEXT, sample))
+        val country = intent.getStringExtra("country").orEmpty()
+        val candidates = VoiceCatalog.tags.filter {
+            val locale = Locale.forLanguageTag(it)
+            requested == locale.language || requested == locale.isO3Language
+        }
+        val tag = candidates.firstOrNull {
+            val locale = Locale.forLanguageTag(it)
+            country.equals(locale.country, true) || country.equals(locale.isO3Country, true)
+        } ?: candidates.firstOrNull() ?: "en-US"
+        val sample = LocalizedSamples.forTag(this, tag)
+        setResult(if (requested != null && candidates.isEmpty()) TextToSpeech.LANG_NOT_SUPPORTED
+            else TextToSpeech.LANG_AVAILABLE, Intent().putExtra(TextToSpeech.Engine.EXTRA_SAMPLE_TEXT, sample))
         finish()
     }
 }

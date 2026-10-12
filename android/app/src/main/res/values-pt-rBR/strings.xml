@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<resources>
+    <string name="app_name">Testes Apple Eloquence</string>
+    <string name="engine_label">Testes Apple Eloquence (ETI)</string>
+    <string name="activity_title">Apple Eloquence: vozes e configurações</string>
+    <string name="introduction">Escolha uma voz, ajuste seus parâmetros e teste a leitura. As configurações são salvas para cada idioma e perfil.</string>
+    <string name="language">Idioma</string>
+    <string name="voice_profile">Perfil de voz</string>
+    <string name="test_text">Texto de teste</string>
+    <string name="read_text">Ler texto</string>
+    <string name="stop_reading">Parar leitura</string>
+    <string name="reading_stopped">Leitura interrompida</string>
+    <string name="initializing">Iniciando o mecanismo…</string>
+    <string name="reset_profile">Restaurar valores do perfil</string>
+    <string name="profile_reset">Valores originais do perfil restaurados</string>
+    <string name="open_system_settings">Abrir as configurações de conversão de texto em voz do sistema</string>
+    <string name="male">Masculino</string>
+    <string name="female">Feminino</string>
+    <string name="voice_gender">Gênero da voz</string>
+    <string name="speed">Velocidade</string>
+    <string name="pitch">Tom</string>
+    <string name="voice_volume">Volume da voz</string>
+    <string name="head_size">Tamanho da cabeça (timbre)</string>
+    <string name="pitch_variation">Variação do tom</string>
+    <string name="roughness">Aspereza</string>
+    <string name="breathiness">Soprosidade (ar na voz)</string>
+    <string name="parameter_value">%1$s: %2$d de %3$d</string>
+    <string name="decrease_parameter">Diminuir: %1$s</string>
+    <string name="increase_parameter">Aumentar: %1$s</string>
+    <string name="parameter_announcement">%1$s: %2$d</string>
+    <string name="parameter_limits">Velocidade: de 0 a 250. Outros parâmetros: de 0 a 100. Valores extremos podem soar pouco naturais. Os recursos avançados e os textos longos ainda estão em teste.</string>
+    <string name="engine_failed">Não foi possível iniciar o mecanismo</string>
+    <string name="reading">Lendo</string>
+    <string name="reading_finished">Leitura concluída</string>
+    <string name="synthesis_failed">O mecanismo não conseguiu sintetizar o texto ou rejeitou um parâmetro</string>
+    <string name="engine_ready">Mecanismo conectado. Escolha uma voz e pressione Ler texto.</string>
+    <string name="enter_text">Digite um texto</string>
+    <string name="profile_unavailable">Perfil indisponível</string>
+    <string name="reading_failed">Não foi possível iniciar a leitura</string>
+    <string name="settings_failed">Não foi possível abrir as configurações do sistema</string>
+    <string name="sample_text">A criança pediu café. Amanhã falará português: á, é, í, ó, ú, ã, õ e ç.</string>
+</resources>

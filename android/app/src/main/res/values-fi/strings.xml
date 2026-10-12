@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<resources>
+    <string name="app_name">Apple Eloquence -testit</string>
+    <string name="engine_label">Apple Eloquence -testit (ETI)</string>
+    <string name="activity_title">Apple Eloquence: äänet ja asetukset</string>
+    <string name="introduction">Valitse ääni, säädä sen parametreja ja kokeile puhetta. Asetukset tallennetaan jokaiselle kielelle ja profiilille.</string>
+    <string name="language">Kieli</string>
+    <string name="voice_profile">Ääniprofiili</string>
+    <string name="test_text">Testiteksti</string>
+    <string name="read_text">Lue teksti</string>
+    <string name="stop_reading">Pysäytä lukeminen</string>
+    <string name="reading_stopped">Lukeminen pysäytetty</string>
+    <string name="initializing">Puhemoottoria käynnistetään…</string>
+    <string name="reset_profile">Palauta profiilin oletusarvot</string>
+    <string name="profile_reset">Profiilin alkuperäiset arvot palautettu</string>
+    <string name="open_system_settings">Avaa järjestelmän tekstistä puheeksi -asetukset</string>
+    <string name="male">Mies</string>
+    <string name="female">Nainen</string>
+    <string name="voice_gender">Äänen sukupuoli</string>
+    <string name="speed">Nopeus</string>
+    <string name="pitch">Äänenkorkeus</string>
+    <string name="voice_volume">Äänen voimakkuus</string>
+    <string name="head_size">Pään koko (äänensävy)</string>
+    <string name="pitch_variation">Äänenkorkeuden vaihtelu</string>
+    <string name="roughness">Karheus</string>
+    <string name="breathiness">Äänen ilmavuus</string>
+    <string name="parameter_value">%1$s: %2$d / %3$d</string>
+    <string name="decrease_parameter">Vähennä: %1$s</string>
+    <string name="increase_parameter">Lisää: %1$s</string>
+    <string name="parameter_announcement">%1$s: %2$d</string>
+    <string name="parameter_limits">Nopeus: 0–250. Muut parametrit: 0–100. Ääriarvot voivat kuulostaa epäluonnollisilta. Lisäominaisuuksia ja pitkiä tekstejä testataan vielä.</string>
+    <string name="engine_failed">Puhemoottoria ei voitu käynnistää</string>
+    <string name="reading">Luetaan</string>
+    <string name="reading_finished">Lukeminen päättynyt</string>
+    <string name="synthesis_failed">Puhemoottori ei voinut muodostaa puhetta tekstistä tai hylkäsi parametrin</string>
+    <string name="engine_ready">Puhemoottori yhdistetty. Valitse ääni ja paina Lue teksti.</string>
+    <string name="enter_text">Kirjoita teksti</string>
+    <string name="profile_unavailable">Profiili ei ole käytettävissä</string>
+    <string name="reading_failed">Lukemista ei voitu aloittaa</string>
+    <string name="settings_failed">Järjestelmän asetuksia ei voitu avata</string>
+    <string name="sample_text">Äiti pyysi kahvia. Huomenna puhumme suomea: ä, ö ja å.</string>
+</resources>

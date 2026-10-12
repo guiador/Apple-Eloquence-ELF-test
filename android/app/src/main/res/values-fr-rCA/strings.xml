@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<resources>
+    <string name="app_name">Tests Apple Eloquence</string>
+    <string name="engine_label">Tests Apple Eloquence (ETI)</string>
+    <string name="activity_title">Apple Eloquence : voix et paramètres</string>
+    <string name="introduction">Choisissez une voix, ajustez ses paramètres et testez la lecture. Les paramètres sont enregistrés pour chaque langue et chaque profil.</string>
+    <string name="language">Langue</string>
+    <string name="voice_profile">Profil de voix</string>
+    <string name="test_text">Texte de test</string>
+    <string name="read_text">Lire le texte</string>
+    <string name="stop_reading">Arrêter la lecture</string>
+    <string name="reading_stopped">Lecture arrêtée</string>
+    <string name="initializing">Démarrage du moteur…</string>
+    <string name="reset_profile">Réinitialiser les valeurs du profil</string>
+    <string name="profile_reset">Valeurs d’origine du profil rétablies</string>
+    <string name="open_system_settings">Ouvrir les paramètres système de synthèse vocale</string>
+    <string name="male">Masculin</string>
+    <string name="female">Féminin</string>
+    <string name="voice_gender">Genre de la voix</string>
+    <string name="speed">Vitesse</string>
+    <string name="pitch">Hauteur</string>
+    <string name="voice_volume">Volume de la voix</string>
+    <string name="head_size">Taille de la tête (timbre)</string>
+    <string name="pitch_variation">Variation de hauteur</string>
+    <string name="roughness">Rugosité</string>
+    <string name="breathiness">Souffle dans la voix</string>
+    <string name="parameter_value">%1$s : %2$d sur %3$d</string>
+    <string name="decrease_parameter">Diminuer : %1$s</string>
+    <string name="increase_parameter">Augmenter : %1$s</string>
+    <string name="parameter_announcement">%1$s : %2$d</string>
+    <string name="parameter_limits">Vitesse : de 0 à 250. Autres paramètres : de 0 à 100. Les valeurs extrêmes peuvent sembler peu naturelles. Les fonctions avancées et les textes longs sont encore en cours de test.</string>
+    <string name="engine_failed">Impossible de démarrer le moteur</string>
+    <string name="reading">Lecture en cours</string>
+    <string name="reading_finished">Lecture terminée</string>
+    <string name="synthesis_failed">Le moteur n’a pas pu synthétiser le texte ou a refusé un paramètre</string>
+    <string name="engine_ready">Moteur connecté. Choisissez une voix et appuyez sur Lire le texte.</string>
+    <string name="enter_text">Saisissez un texte</string>
+    <string name="profile_unavailable">Profil indisponible</string>
+    <string name="reading_failed">Impossible de démarrer la lecture</string>
+    <string name="settings_failed">Impossible d’ouvrir les paramètres système</string>
+    <string name="sample_text">L’enfant a demandé un café. Demain, nous parlerons français : à, é, è, ê, ç et œ.</string>
+</resources>

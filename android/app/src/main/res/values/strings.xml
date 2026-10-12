@@ -1,6 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: MIT -->
 <resources>
-    <string name="app_name">Apple Eloquence pruebas</string>
-    <string name="engine_label">Apple Eloquence pruebas (ETI)</string>
+    <string name="decrease_symbol" translatable="false">−</string>
+    <string name="increase_symbol" translatable="false">+</string>
+    <string name="app_name">Apple Eloquence tests</string>
+    <string name="engine_label">Apple Eloquence tests (ETI)</string>
+    <string name="activity_title">Apple Eloquence: voices and settings</string>
+    <string name="introduction">Choose a voice, adjust its parameters and test the speech. Settings are saved for each language and profile.</string>
+    <string name="language">Language</string>
+    <string name="voice_profile">Voice profile</string>
+    <string name="test_text">Test text</string>
+    <string name="read_text">Read text</string>
+    <string name="stop_reading">Stop reading</string>
+    <string name="reading_stopped">Reading stopped</string>
+    <string name="initializing">Starting the engine…</string>
+    <string name="reset_profile">Reset profile values</string>
+    <string name="profile_reset">Original profile values restored</string>
+    <string name="open_system_settings">Open system text-to-speech settings</string>
+    <string name="male">Male</string>
+    <string name="female">Female</string>
+    <string name="voice_gender">Voice gender</string>
+    <string name="speed">Speed</string>
+    <string name="pitch">Pitch</string>
+    <string name="voice_volume">Voice volume</string>
+    <string name="head_size">Head size (timbre)</string>
+    <string name="pitch_variation">Pitch variation</string>
+    <string name="roughness">Roughness</string>
+    <string name="breathiness">Breathiness</string>
+    <string name="parameter_value">%1$s: %2$d of %3$d</string>
+    <string name="decrease_parameter">Decrease %1$s</string>
+    <string name="increase_parameter">Increase %1$s</string>
+    <string name="parameter_announcement">%1$s: %2$d</string>
+    <string name="parameter_limits">Speed: 0 to 250. Other parameters: 0 to 100. Extreme values may sound unnatural. Advanced features and long texts are still being tested.</string>
+    <string name="engine_failed">The engine could not start</string>
+    <string name="reading">Reading</string>
+    <string name="reading_finished">Reading finished</string>
+    <string name="synthesis_failed">The engine could not synthesize the text or rejected a parameter</string>
+    <string name="engine_ready">Engine connected. Choose a voice and press Read text.</string>
+    <string name="enter_text">Enter some text</string>
+    <string name="profile_unavailable">Profile unavailable</string>
+    <string name="reading_failed">Reading could not start</string>
+    <string name="settings_failed">System settings could not be opened</string>
+    <string name="sample_text">The child asked for coffee. Tomorrow we will speak English. Color, neighbor, one, two, three.</string>
 </resources>
