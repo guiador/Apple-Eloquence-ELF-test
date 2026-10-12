@@ -89,6 +89,7 @@ VARIADIC_SHIMS = {
 # toupper, and our _DefaultRuneLocale stub are all fine as-is on Bionic.
 BIONIC_RENAMES = {
     "__error": "__errno",   # Apple ___error -> Bionic __errno
+    "pthread_attr_setdetachstate": "m2e_android_attr_setdetachstate",
 }
 
 # ----------------------------------------------------------------------------
@@ -1095,6 +1096,7 @@ unsigned long __maskrune(int c, unsigned long mask) {
         content += VARIADIC_TRAMPOLINES_ARM64
     if target and target.startswith("android"):
         content += BIONIC_COMPAT_STUBS
+        content += Path(__file__).with_name("android_pthread.c").read_text()
     if target == "android-arm64":
         content += Path(__file__).with_name("android_setjmp.c").read_text()
     with open(stubs_path, "w") as f:
