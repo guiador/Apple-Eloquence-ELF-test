@@ -196,7 +196,13 @@ class EloquenceTtsService : TextToSpeechService() {
 
     private fun ensureEngine(dialect: Int): Boolean {
         if (handle != 0L && dialect == currentDialect) return true
-        if (handle != 0L) { EloquenceNative.nativeShutdown(handle); handle = 0 }
+        if (handle != 0L) {
+            // Mirror upstream engine_switch_language: Delete+NewEx can leave
+            // Apple's module hooks stale on the next synthesis.
+            if (!EloquenceNative.nativeSetLanguage(handle, dialect)) return false
+            currentDialect = dialect
+            return true
+        }
         handle = EloquenceNative.nativeInit(filesDir.absolutePath, dialect)
         if (handle == 0L) { Log.e(TAG, "nativeInit failed for dialect 0x%08x".format(dialect)); return false }
         currentDialect = dialect

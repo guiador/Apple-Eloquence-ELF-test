@@ -154,6 +154,26 @@ Java_com_eloquence_tts_EloquenceNative_nativeInit(JNIEnv *env, jclass clazz,
 }
 
 JNIEXPORT jboolean JNICALL
+Java_com_eloquence_tts_EloquenceNative_nativeSetLanguage(JNIEnv *env, jclass c,
+        jlong handle, jint dialect) {
+    (void)env; (void)c;
+    Engine *e = (Engine *)(intptr_t)handle;
+    if (!e || !e->SetParam) return JNI_FALSE;
+    if (e->Stop) e->Stop(e->eci);
+    if (e->Synchronize) e->Synchronize(e->eci);
+    if (e->Speaking) {
+        int guard = 0;
+        while (e->Speaking(e->eci) && guard++ < 10000) usleep(1000);
+        if (e->Speaking(e->eci)) return JNI_FALSE;
+    }
+    /* Apple's SetParam can return -1 while changing dialect successfully.
+     * Upstream sd_eloquence deliberately uses this path: Delete+NewEx corrupts
+     * hooks on module reload. Preserve the live instance and its callbacks. */
+    e->SetParam(e->eci, eciLanguageDialect, dialect);
+    return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
 Java_com_eloquence_tts_EloquenceNative_nativeSetVoice(JNIEnv *env, jclass c,
         jlong handle, jintArray parameters) {
     (void)c;
@@ -168,7 +188,10 @@ Java_com_eloquence_tts_EloquenceNative_nativeSetVoice(JNIEnv *env, jclass c,
         if (values[i] < 0 || values[i] > max) return JNI_FALSE;
     }
     for (int i = 0; i < 8; ++i)
-        if (e->SetVoiceParam(e->eci, 0, i, values[i]) < 0) return JNI_FALSE;
+        if (e->SetVoiceParam(e->eci, 0, i, values[i]) < 0) {
+            LOGE("voice parameter %d rejected (value=%d)", i, values[i]);
+            return JNI_FALSE;
+        }
     return JNI_TRUE;
 }
 

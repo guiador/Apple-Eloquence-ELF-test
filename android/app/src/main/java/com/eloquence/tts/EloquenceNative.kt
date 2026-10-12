@@ -22,6 +22,9 @@ object EloquenceNative {
     /** Apply all eight ECI voice parameters to the active slot. */
     external fun nativeSetVoice(handle: Long, parameters: IntArray): Boolean
 
+    /** Switch the live engine's dialect; do not delete/reload Apple's modules. */
+    external fun nativeSetLanguage(handle: Long, dialect: Int): Boolean
+
     /** Synthesize one utterance -> 11025 Hz mono S16 PCM, or null on abort. */
     external fun nativeSynthesize(handle: Long, text: ByteArray): ShortArray?
 
