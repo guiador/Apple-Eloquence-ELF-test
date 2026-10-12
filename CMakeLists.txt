@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(apple-eloquence-elf
-    VERSION 1.2.3
+    VERSION 1.3.0
     DESCRIPTION "Convert Apple's bundled ETI Eloquence Mach-O dylibs to Linux ELF; speech-dispatcher integration."
     LANGUAGES C)
 
@@ -49,9 +49,15 @@ if(BUILD_SD_MODULE)
         # speech-dispatcher exposes a `modulebindir` pkg-config variable that
         # tells us where the daemon looks for module binaries on this system
         # (typically /usr/lib/speech-dispatcher/speech-dispatcher-modules).
-        # Always use that instead of guessing -- different distros put it in
-        # different places.
-        pkg_get_variable(SPEECHD_MODULEBINDIR speech-dispatcher modulebindir)
+        # Use that instead of guessing -- different distros put it in
+        # different places -- unless the packager overrides it with
+        # -DSPEECHD_MODULEBINDIR=... (needed on store-based distros like
+        # NixOS or Guix, where the pkg-config value points into
+        # speech-dispatcher's own read-only install and the module must go
+        # in this package's prefix instead).
+        if(NOT SPEECHD_MODULEBINDIR)
+            pkg_get_variable(SPEECHD_MODULEBINDIR speech-dispatcher modulebindir)
+        endif()
         if(NOT SPEECHD_MODULEBINDIR)
             message(FATAL_ERROR
                 "speech-dispatcher's pkg-config doesn't expose modulebindir. "
@@ -334,11 +340,20 @@ if(INSTALL_PREBUILT_DYLIBS)
         DESTINATION ${_ELOQUENCE_DATA_DIR}
         FILES_MATCHING PATTERN "*.so")
 
-    # Generate the multi-section eci.ini at install time so it respects
-    # --prefix and DESTDIR (the Path= entries reference the final
-    # location; the file itself is written to DESTDIR-prefixed staging).
+    # Generate the multi-section eci.ini at install time. DATA_DIR is only
+    # used to locate WHERE the file is written (respecting --prefix and
+    # DESTDIR); the Path=/Path_Rom= entries INSIDE it are "./"-relative --
+    # see the foreach below for why. CMAKE_INSTALL_LIBDIR may be absolute
+    # (Nix and Guix pass it that way); only prepend the install prefix when
+    # it is relative, mirroring how GNUInstallDirs computes
+    # CMAKE_INSTALL_FULL_LIBDIR.
+    if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+        set(_ECI_DATA_DIR_CODE "${CMAKE_INSTALL_LIBDIR}/eloquence")
+    else()
+        set(_ECI_DATA_DIR_CODE "\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/eloquence")
+    endif()
     install(CODE "
-        set(DATA_DIR \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/eloquence\")
+        set(DATA_DIR \"${_ECI_DATA_DIR_CODE}\")
         set(STAGED \"\$ENV{DESTDIR}\${DATA_DIR}\")
         set(INI \"\${STAGED}/eci.ini\")
         message(STATUS \"Generating \${INI}\")
@@ -349,6 +364,16 @@ if(INSTALL_PREBUILT_DYLIBS)
 # modules fail eciNewEx with 'No Romanizer Error'.
 
 \")
+        # Paths are \"./\"-relative, NOT absolute. sd_eloquence chdir()s to
+        # this data dir before eciNewEx (that is also how the engine finds
+        # eci.ini), so \"./enu.so\" resolves correctly. This is deliberate:
+        # the ECI engine copies each Path into a bounded internal buffer and
+        # overflows on long absolute paths, corrupting an adjacent function
+        # pointer (the Klatt const-params hook) and crashing on the first
+        # synthesis. /usr/lib/eloquence installs stay under the limit, but a
+        # long prefix -- a Nix/Guix store path, a deep DESTDIR, a long $HOME
+        # -- does not. Relative paths keep the engine-visible strings ~8
+        # chars regardless of where the package is installed.
         # section | primary.so | romanizer.so (empty for non-CJK)
         set(LANG_TRIPLES
             \"1.0|enu.so|\"        \"1.1|eng.so|\"
@@ -366,9 +391,9 @@ if(INSTALL_PREBUILT_DYLIBS)
             list(GET parts 0 sect)
             list(GET parts 1 so)
             list(GET parts 2 rom)
-            file(APPEND \"\${INI}\" \"[\${sect}]\\nPath=\${DATA_DIR}/\${so}\\n\")
+            file(APPEND \"\${INI}\" \"[\${sect}]\\nPath=./\${so}\\n\")
             if(NOT rom STREQUAL \"\")
-                file(APPEND \"\${INI}\" \"Path_Rom=\${DATA_DIR}/\${rom}\\n\")
+                file(APPEND \"\${INI}\" \"Path_Rom=./\${rom}\\n\")
             endif()
             file(APPEND \"\${INI}\" \"Version=6.1\\n\\n\")
         endforeach()
