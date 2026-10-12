@@ -43,7 +43,9 @@ android {
     // executable code is permitted (writable app storage is not).
     packaging {
         // Keep the page-aligned engine libs uncompressed so they mmap directly.
-        jniLibs { useLegacyPackaging = false }
+        // The ECI engine opens language modules using physical Path= filenames.
+        // Extract them to nativeLibraryDir rather than leaving them only in the APK.
+        jniLibs { useLegacyPackaging = true }
     }
 
     buildTypes {
