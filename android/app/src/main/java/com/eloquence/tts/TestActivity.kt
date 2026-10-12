@@ -25,7 +25,7 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var speak: Button
     private val bars = mutableMapOf<Int, SeekBar>()
     private val values = mutableMapOf<Int, TextView>()
-    private var tag = "es-ES"
+    private var languageTag = "es-ES"
     private var selectedProfile = 0
     private var loading = false
 
@@ -34,8 +34,8 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
         title = "Apple Eloquence: voces y ajustes"
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         settings = VoiceSettings(this)
-        tag = settings.language()
-        selectedProfile = settings.profile(tag)
+        languageTag = settings.language()
+        selectedProfile = settings.profile(languageTag)
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val padding = (16 * resources.displayMetrics.density).toInt()
@@ -79,7 +79,7 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
         column.addView(status)
         column.addView(Button(this).apply {
             setText("Restablecer valores del perfil")
-            setOnClickListener { settings.reset(tag, selectedProfile); loadControls(); status.text = "Valores originales del perfil restaurados" }
+            setOnClickListener { settings.reset(languageTag, selectedProfile); loadControls(); status.text = "Valores originales del perfil restaurados" }
         })
         column.addView(Button(this).apply {
             setText("Abrir ajustes de texto a voz del sistema")
@@ -102,7 +102,7 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         value.text = "$caption: $progress de $max"
-                        if (!loading) settings.set(tag, selectedProfile, parameter, progress)
+                        if (!loading) settings.set(languageTag, selectedProfile, parameter, progress)
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -116,7 +116,10 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
                     addView(Button(this@TestActivity).apply {
                         setText(if (delta < 0) "−" else "+")
                         contentDescription = "$action $caption"
-                        setOnClickListener { bar.progress = (bar.progress + delta).coerceIn(0, bar.max) }
+                        setOnClickListener {
+                            bar.progress = (bar.progress + delta).coerceIn(0, bar.max)
+                            bar.announceForAccessibility("$caption: ${bar.progress}")
+                        }
                     }, LinearLayout.LayoutParams(0, -2, 1f))
                 }
             })
@@ -126,17 +129,17 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
         })
         setContentView(ScrollView(this).apply { addView(column) })
         loading = true
-        language.setSelection(VoiceCatalog.tags.indexOf(tag))
+        language.setSelection(VoiceCatalog.tags.indexOf(languageTag))
         updateProfileNames()
         loading = false
         loadControls()
         language.onItemSelectedListener = selection { position ->
             val chosen = VoiceCatalog.tags[position]
-            if (!loading && chosen != tag) {
+            if (!loading && chosen != languageTag) {
                 tts?.stop()
-                tag = chosen
-                selectedProfile = settings.profile(tag)
-                settings.selectLanguage(tag)
+                languageTag = chosen
+                selectedProfile = settings.profile(languageTag)
+                settings.selectLanguage(languageTag)
                 loading = true
                 updateProfileNames()
                 loading = false
@@ -147,13 +150,13 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
             if (!loading && position != selectedProfile) {
                 tts?.stop()
                 selectedProfile = position
-                settings.selectProfile(tag, position)
+                settings.selectProfile(languageTag, position)
                 loadControls()
             }
         }
         gender.onItemSelectedListener = selection { position ->
-            if (!loading && position != settings.parameters(tag, selectedProfile)[0])
-                settings.set(tag, selectedProfile, 0, position)
+            if (!loading && position != settings.parameters(languageTag, selectedProfile)[0])
+                settings.set(languageTag, selectedProfile, 0, position)
         }
         tts = TextToSpeech(this, this, packageName)
     }
@@ -165,13 +168,13 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun updateProfileNames() {
         profile.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item,
-            VoiceCatalog.presets.map { it.displayName(tag) })
+            VoiceCatalog.presets.map { it.displayName(languageTag) })
         profile.setSelection(selectedProfile)
     }
 
     private fun loadControls() {
         loading = true
-        val parameters = settings.parameters(tag, selectedProfile)
+        val parameters = settings.parameters(languageTag, selectedProfile)
         gender.setSelection(parameters[0])
         for ((parameter, bar) in bars) {
             bar.progress = parameters[parameter]
@@ -198,7 +201,7 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
         val engine = tts ?: return
         val message = text.text.toString()
         if (message.isBlank()) { text.error = "Escribe un texto"; text.requestFocus(); return }
-        val voice = engine.voices?.firstOrNull { it.name == VoiceCatalog.id(tag, selectedProfile) }
+        val voice = engine.voices?.firstOrNull { it.name == VoiceCatalog.id(languageTag, selectedProfile) }
         if (voice == null || engine.setVoice(voice) < 0) { status.text = "Perfil no disponible"; return }
         engine.setSpeechRate(1f)
         engine.setPitch(1f)
@@ -215,3 +218,4 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onStop() { tts?.stop(); super.onStop() }
     override fun onDestroy() { tts?.shutdown(); tts = null; super.onDestroy() }
 }
+
