@@ -79,6 +79,8 @@ static enum ECICallbackReturn pcm_cb(ECIHand h, enum ECIMessage msg,
     Engine *e = (Engine *)pData;
     if (e->abort) return eciDataAbort;
     if (msg != eciWaveformBuffer || lParam <= 0) return eciDataProcessed;
+    if (e->pcm_len == 0) LOGI("first waveform chunk=%ld", lParam);
+    if (lParam > CHUNK_SAMPLES) { LOGE("oversized waveform chunk=%ld", lParam); return eciDataAbort; }
     long need = e->pcm_len + lParam;
     if (need > e->pcm_cap) {
         long ncap = e->pcm_cap ? e->pcm_cap * 2 : 65536;
@@ -143,6 +145,14 @@ Java_com_eloquence_tts_EloquenceNative_nativeInit(JNIEnv *env, jclass clazz,
     e->eci = (NewEx && dialect) ? NewEx(dialect) : (New ? New() : NULL);
     if (!e->eci) { LOGE("eciNew/eciNewEx failed (check eci.ini + ProgStatus)"); free(e); dlclose(lib); return 0; }
 
+    /* Match upstream engine_open's generic-text setup rather than relying on
+     * the Apple build's screen-reader defaults. */
+    if (e->SetParam) {
+        e->SetParam(e->eci, 0, 1);  /* eciSynthMode: generic text */
+        e->SetParam(e->eci, 1, 1);  /* eciInputType: Apple annotation parser */
+        e->SetParam(e->eci, 3, 1);  /* eciDictionary: abbreviation expansion off */
+    }
+
     RegisterCallback(e->eci, pcm_cb, e);               /* before SetOutputBuffer */
     e->SetOutputBuffer(e->eci, CHUNK_SAMPLES, e->chunk);
     if (e->SetParam) e->SetParam(e->eci, eciSampleRate, 1);  /* 11025 Hz (Apple) */
@@ -169,7 +179,11 @@ Java_com_eloquence_tts_EloquenceNative_nativeSetLanguage(JNIEnv *env, jclass c,
     /* Apple's SetParam can return -1 while changing dialect successfully.
      * Upstream sd_eloquence deliberately uses this path: Delete+NewEx corrupts
      * hooks on module reload. Preserve the live instance and its callbacks. */
-    e->SetParam(e->eci, eciLanguageDialect, dialect);
+    int result = e->SetParam(e->eci, eciLanguageDialect, dialect);
+    typedef int (*fn_GetParam)(ECIHand, int);
+    fn_GetParam GetParam = (fn_GetParam)dlsym(e->lib, "eciGetParam");
+    LOGI("dialect request=0x%x result=%d reported=0x%x", dialect, result,
+         GetParam ? GetParam(e->eci, eciLanguageDialect) : 0);
     return JNI_TRUE;
 }
 
@@ -187,6 +201,8 @@ Java_com_eloquence_tts_EloquenceNative_nativeSetVoice(JNIEnv *env, jclass c,
         int max = i == 0 ? 1 : (i == 6 ? 250 : 100);
         if (values[i] < 0 || values[i] > max) return JNI_FALSE;
     }
+    LOGI("voice parameters=%d,%d,%d,%d,%d,%d,%d,%d", values[0], values[1],
+         values[2], values[3], values[4], values[5], values[6], values[7]);
     for (int i = 0; i < 8; ++i)
         if (e->SetVoiceParam(e->eci, 0, i, values[i]) < 0) {
             LOGE("voice parameter %d rejected (value=%d)", i, values[i]);
@@ -209,6 +225,7 @@ Java_com_eloquence_tts_EloquenceNative_nativeSynthesize(JNIEnv *env, jclass c,
     (*env)->GetByteArrayRegion(env, jText, 0, length, (jbyte *)text);
     if ((*env)->ExceptionCheck(env)) { free(text); return NULL; }
     text[length] = '\0';
+    LOGI("synthesis input bytes=%d", length);
 
     e->pcm_len = 0;
     e->abort = 0;
