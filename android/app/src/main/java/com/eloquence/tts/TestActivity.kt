@@ -218,4 +218,3 @@ class TestActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onStop() { tts?.stop(); super.onStop() }
     override fun onDestroy() { tts?.shutdown(); tts = null; super.onDestroy() }
 }
-

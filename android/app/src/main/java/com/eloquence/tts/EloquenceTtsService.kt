@@ -116,7 +116,7 @@ class EloquenceTtsService : TextToSpeechService() {
     private fun namedVoice(name: String?): Pair<String, Int>? {
         VoiceCatalog.parse(name)?.let { return it }
         // Accept the old locale-only names for clients retaining the previous APK's voices.
-        if (name in VoiceCatalog.tags) return name!! to settings.profile(name)
+        VoiceCatalog.legacyTag(name)?.let { return it to settings.profile(it) }
         return null
     }
 

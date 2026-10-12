@@ -36,4 +36,12 @@ class VoiceRegressionTest {
         assertEquals("Jacques", VoiceCatalog.presets[0].displayName("fr-FR"))
         assertEquals("Reed", VoiceCatalog.presets[0].displayName("es-ES"))
     }
+    @Test fun oldLocaleOnlyVoiceNamesKeepTheirLanguageFallback() {
+        assertEquals("es-ES", VoiceCatalog.legacyTag("es"))
+        assertEquals("es-ES", VoiceCatalog.legacyTag("es-PE"))
+        assertEquals("es-MX", VoiceCatalog.legacyTag("es-MX"))
+        assertEquals("fr-CA", VoiceCatalog.legacyTag("fr-CA"))
+        assertNull(VoiceCatalog.legacyTag("apple:es-ES:unknown"))
+        assertNull(VoiceCatalog.legacyTag("ja-JP"))
+    }
 }

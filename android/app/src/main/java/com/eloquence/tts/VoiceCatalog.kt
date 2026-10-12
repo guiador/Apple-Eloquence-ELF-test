@@ -4,6 +4,7 @@ package com.eloquence.tts
 
 import java.nio.charset.Charset
 import java.text.Normalizer
+import java.util.Locale
 
 data class VoicePreset(val name: String, val parameters: List<Int>) {
     fun displayName(tag: String) = if (name == "Reed" && tag.startsWith("fr")) "Jacques" else name
@@ -32,6 +33,14 @@ object VoiceCatalog {
         return null
     }
     fun maximum(parameter: Int) = when (parameter) { 0 -> 1; 6 -> 250; else -> 100 }
+    fun legacyTag(name: String?): String? {
+        if (name.isNullOrEmpty() || name.startsWith("apple:")) return null
+        val locale = Locale.forLanguageTag(name)
+        tags.firstOrNull { it.equals(locale.toLanguageTag(), ignoreCase = true) }?.let { return it }
+        // The old Android default enumerator could create es, es-PE, etc.
+        // Retain its language fallback without advertising invented new profiles.
+        return tags.firstOrNull { Locale.forLanguageTag(it).language == locale.language }
+    }
     fun prosody(parameters: IntArray, ratePercent: Int, pitchPercent: Int): IntArray =
         parameters.copyOf().apply {
             this[6] = (this[6].toLong() * ratePercent / 100).coerceIn(0, 250).toInt()
