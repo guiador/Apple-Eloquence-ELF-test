@@ -100,7 +100,8 @@ static void *sym(void *lib, const char *name) {
 }
 
 /* nativeInit(dataDir, dialect) -> handle (0 on failure).
- * dataDir holds eci.so + the language .so files + eci.ini (abs Path=). */
+ * dataDir holds eci.ini. Android installs libeci.so and the language modules
+ * in the application's native library directory, outside writable dataDir. */
 JNIEXPORT jlong JNICALL
 Java_com_eloquence_tts_EloquenceNative_nativeInit(JNIEnv *env, jclass clazz,
                                                   jstring jDataDir, jint dialect) {
@@ -110,11 +111,11 @@ Java_com_eloquence_tts_EloquenceNative_nativeInit(JNIEnv *env, jclass clazz,
     /* The engine resolves eci.ini relative to cwd. */
     if (chdir(dataDir) != 0) LOGE("chdir(%s) failed", dataDir);
 
-    char path[1024];
-    snprintf(path, sizeof path, "%s/eci.so", dataDir);
-    void *lib = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+    /* Resolve through the JNI library's Android linker namespace. The APK's
+     * nativeLibraryDir is on that namespace's search path. */
+    void *lib = dlopen("libeci.so", RTLD_NOW | RTLD_GLOBAL);
     (*env)->ReleaseStringUTFChars(env, jDataDir, dataDir);
-    if (!lib) { LOGE("dlopen eci.so: %s", dlerror()); return 0; }
+    if (!lib) { LOGE("dlopen libeci.so: %s", dlerror()); return 0; }
 
     Engine *e = (Engine *)calloc(1, sizeof(Engine));
     if (!e) { dlclose(lib); return 0; }

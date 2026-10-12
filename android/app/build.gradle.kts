@@ -49,6 +49,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Independently installable device-test variant; retains the earlier
+            // APK and the phone's chosen screen-reader engine during diagnosis.
+            applicationIdSuffix = ".pruebas"
+            versionNameSuffix = "-pruebas2"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
