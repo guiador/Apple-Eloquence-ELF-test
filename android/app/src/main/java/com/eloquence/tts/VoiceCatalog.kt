@@ -52,5 +52,5 @@ object TextCodec {
     // Western modules take legacy bytes, not JNI's modified UTF-8. NFC merges
     // decomposed accents; unrepresentable code points become charset '?' bytes.
     fun encode(text: String): ByteArray = Normalizer.normalize(text, Normalizer.Form.NFC)
-        .replace('\u0000', ' ').toByteArray(western)
+        .replace('\u0000', ' ').replace('`', ' ').toByteArray(western)
 }

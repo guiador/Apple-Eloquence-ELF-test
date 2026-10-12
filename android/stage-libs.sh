@@ -54,6 +54,9 @@ for dylib in "$VENDOR"/*.dylib; do
 done
 
 cp "$LIBCXX" "$OUT/libc++_shared.so"
+"$CLANG" -Wall -Wextra -Werror -fPIE -pie "$HERE/jni/eloquence_worker.c" \
+    -ldl -o "$OUT/libeloquence_worker.so"
+echo "  staged standalone native renderer"
 echo "  staged libc++_shared.so"
 echo "Done -> $OUT"
 echo "Note: eci.ini is generated at runtime by EloquenceTtsService; the engine"

@@ -1,267 +1,123 @@
-/*
- * SPDX-License-Identifier: MIT
- *
- * eloquence_jni.c -- JNI bridge between an Android TextToSpeechService and the
- * converted Apple Eloquence engine (eci.so + language modules).
- *
- * The engine is dlopen'd at runtime from the app's data dir; its ECI C API is
- * resolved by dlsym. Synthesis is pull-based: AddText + Synthesize, with the
- * engine delivering 16-bit PCM through an ECI callback that we accumulate into
- * a Java short[]. The Java side (EloquenceTtsService) feeds that to the
- * platform SynthesisCallback.
- *
- * Engine quirks handled here mirror examples/speak.c and sd_eloquence:
- *   - RegisterCallback must precede SetOutputBuffer.
- *   - Synchronize is non-blocking on Apple's build; we drain via Speaking().
- *   - eci.ini (with absolute Path= entries) must be discoverable; the Java
- *     side writes it into dataDir and we chdir there before eciNew.
+/* SPDX-License-Identifier: MIT
+ * JNI control + bounded IPC for a standalone, same-UID native renderer.
+ * The converted Apple libraries stay outside ART's linker/runtime context.
  */
 #include <jni.h>
-#include <dlfcn.h>
+#include <android/log.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
-#include <stdint.h>
-#include <android/log.h>
-
-#define LOG_TAG "EloquenceJNI"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
-/* --- Minimal ECI ABI (mirrors sd_eloquence/src/eci/eci.h) ----------------- */
-typedef void *ECIHand;
-typedef const void *ECIInputText;
-enum ECIMessage        { eciWaveformBuffer = 0 };
-enum ECICallbackReturn { eciDataNotProcessed = 0, eciDataProcessed = 1, eciDataAbort = 2 };
-enum ECIParam          { eciSampleRate = 5, eciLanguageDialect = 9 };
-enum ECIVoiceParam     { eciPitchBaseline = 2, eciSpeed = 6, eciVolume = 7 };
-typedef enum ECICallbackReturn (*ECICallback)(ECIHand, enum ECIMessage, long, void *);
-
-/* Resolved entry points (names as exported by the converted eci.so). */
-typedef ECIHand (*fn_New)(void);
-typedef ECIHand (*fn_NewEx)(int);
-typedef int     (*fn_Delete)(ECIHand);
-typedef void    (*fn_Version)(char *);
-typedef int     (*fn_SetParam)(ECIHand, int, int);
-typedef int     (*fn_SetVoiceParam)(ECIHand, int, int, int);
-typedef int     (*fn_AddText)(ECIHand, ECIInputText);
-typedef int     (*fn_Synthesize)(ECIHand);
-typedef int     (*fn_Synchronize)(ECIHand);
-typedef int     (*fn_Speaking)(ECIHand);
-typedef int     (*fn_Stop)(ECIHand);
-typedef void    (*fn_RegisterCallback)(ECIHand, ECICallback, void *);
-typedef int     (*fn_SetOutputBuffer)(ECIHand, int, short *);
-
-/* One engine instance per native handle. */
-#define CHUNK_SAMPLES 8192
-typedef struct {
-    void *lib;                 /* dlopen handle for eci.so                    */
-    ECIHand eci;               /* engine handle                              */
-    fn_Delete         Delete;
-    fn_SetParam       SetParam;
-    fn_SetVoiceParam  SetVoiceParam;
-    fn_AddText        AddText;
-    fn_Synthesize     Synthesize;
-    fn_Synchronize    Synchronize;
-    fn_Speaking       Speaking;
-    fn_Stop           Stop;
-    fn_SetOutputBuffer SetOutputBuffer;
-    short  chunk[CHUNK_SAMPLES];
-    short *pcm;                /* accumulation buffer for the active utterance */
-    long   pcm_len;
-    long   pcm_cap;
-    int    abort;             /* set by Java onStop to short-circuit          */
-} Engine;
-
-static enum ECICallbackReturn pcm_cb(ECIHand h, enum ECIMessage msg,
-                                     long lParam, void *pData) {
-    (void)h;
-    Engine *e = (Engine *)pData;
-    if (e->abort) return eciDataAbort;
-    if (msg != eciWaveformBuffer || lParam <= 0) return eciDataProcessed;
-    if (e->pcm_len == 0) LOGI("first waveform chunk=%ld", lParam);
-    if (lParam > CHUNK_SAMPLES) { LOGE("oversized waveform chunk=%ld", lParam); return eciDataAbort; }
-    long need = e->pcm_len + lParam;
-    if (need > e->pcm_cap) {
-        long ncap = e->pcm_cap ? e->pcm_cap * 2 : 65536;
-        while (ncap < need) ncap *= 2;
-        short *p = (short *)realloc(e->pcm, (size_t)ncap * sizeof(short));
-        if (!p) return eciDataAbort;
-        e->pcm = p;
-        e->pcm_cap = ncap;
-    }
-    memcpy(e->pcm + e->pcm_len, e->chunk, (size_t)lParam * sizeof(short));
-    e->pcm_len += lParam;
-    return eciDataProcessed;
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,"EloquenceJNI",__VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,"EloquenceJNI",__VA_ARGS__)
+#define MAX_SAMPLES (16u * 1024u * 1024u)
+extern char **environ;
+typedef struct { char *data, *libraries; int dialect, values[8], abort; pid_t child; } Engine;
+static int valid_dialect(int dialect) {
+    const int codes[]={0x10000,0x10001,0x20000,0x20001,0x30000,0x30001,0x40000,0x50000,0x70000,0x90000};
+    for(size_t i=0;i<sizeof(codes)/sizeof(codes[0]);++i) if(codes[i]==dialect)return 1;
+    return 0;
 }
-
-static void *sym(void *lib, const char *name) {
-    void *p = dlsym(lib, name);
-    if (!p) LOGE("missing symbol: %s", name);
-    return p;
-}
-
-/* nativeInit(dataDir, dialect) -> handle (0 on failure).
- * dataDir holds eci.ini. Android installs libeci.so and the language modules
- * in the application's native library directory, outside writable dataDir. */
-JNIEXPORT jlong JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeInit(JNIEnv *env, jclass clazz,
-                                                  jstring jDataDir, jint dialect) {
-    (void)clazz;
-    const char *dataDir = (*env)->GetStringUTFChars(env, jDataDir, NULL);
-
-    /* The engine resolves eci.ini relative to cwd. */
-    if (chdir(dataDir) != 0) LOGE("chdir(%s) failed", dataDir);
-
-    /* Resolve through the JNI library's Android linker namespace. The APK's
-     * nativeLibraryDir is on that namespace's search path. */
-    void *lib = dlopen("libeci.so", RTLD_NOW | RTLD_GLOBAL);
-    (*env)->ReleaseStringUTFChars(env, jDataDir, dataDir);
-    if (!lib) { LOGE("dlopen libeci.so: %s", dlerror()); return 0; }
-
-    Engine *e = (Engine *)calloc(1, sizeof(Engine));
-    if (!e) { dlclose(lib); return 0; }
-    e->lib = lib;
-
-    fn_NewEx            NewEx            = (fn_NewEx)sym(lib, "eciNewEx");
-    fn_New              New              = (fn_New)sym(lib, "eciNew");
-    fn_RegisterCallback RegisterCallback = (fn_RegisterCallback)sym(lib, "eciRegisterCallback");
-    e->Delete          = (fn_Delete)sym(lib, "eciDelete");
-    e->SetParam        = (fn_SetParam)sym(lib, "eciSetParam");
-    e->SetVoiceParam   = (fn_SetVoiceParam)sym(lib, "eciSetVoiceParam");
-    e->AddText         = (fn_AddText)sym(lib, "eciAddText");
-    e->Synthesize      = (fn_Synthesize)sym(lib, "eciSynthesize");
-    e->Synchronize     = (fn_Synchronize)sym(lib, "eciSynchronize");
-    e->Speaking        = (fn_Speaking)sym(lib, "eciSpeaking");
-    e->Stop            = (fn_Stop)sym(lib, "eciStop");
-    e->SetOutputBuffer = (fn_SetOutputBuffer)sym(lib, "eciSetOutputBuffer");
-
-    if (!RegisterCallback || !e->AddText || !e->Synthesize || !e->SetOutputBuffer) {
-        LOGE("required ECI symbols missing");
-        free(e); dlclose(lib); return 0;
+JNIEXPORT jlong JNICALL Java_com_eloquence_tts_EloquenceNative_nativeInit(
+        JNIEnv *env,jclass clazz,jstring data,jstring libraries,jint dialect) {
+    (void)clazz;if(!data||!libraries||!valid_dialect(dialect))return 0;
+    Engine *e=calloc(1,sizeof(*e));if(!e)return 0;
+    const char *s=(*env)->GetStringUTFChars(env,data,NULL);
+    if(s){e->data=strdup(s);(*env)->ReleaseStringUTFChars(env,data,s);}
+    s=(*env)->GetStringUTFChars(env,libraries,NULL);
+    if(s){e->libraries=strdup(s);(*env)->ReleaseStringUTFChars(env,libraries,s);}
+    char path[4096];
+    if(!e->data||!e->libraries||snprintf(path,sizeof(path),"%s/libeloquence_worker.so",e->libraries)>=(int)sizeof(path)||access(path,X_OK)) {
+        free(e->data);free(e->libraries);free(e);LOGE("Native renderer unavailable");return 0;
     }
-
-    /* Prefer eciNewEx(dialect) so the language module loads up front. */
-    e->eci = (NewEx && dialect) ? NewEx(dialect) : (New ? New() : NULL);
-    if (!e->eci) { LOGE("eciNew/eciNewEx failed (check eci.ini + ProgStatus)"); free(e); dlclose(lib); return 0; }
-
-    /* Match upstream engine_open's generic-text setup rather than relying on
-     * the Apple build's screen-reader defaults. */
-    if (e->SetParam) {
-        e->SetParam(e->eci, 0, 1);  /* eciSynthMode: generic text */
-        e->SetParam(e->eci, 1, 1);  /* eciInputType: Apple annotation parser */
-        e->SetParam(e->eci, 3, 1);  /* eciDictionary: abbreviation expansion off */
-    }
-
-    RegisterCallback(e->eci, pcm_cb, e);               /* before SetOutputBuffer */
-    e->SetOutputBuffer(e->eci, CHUNK_SAMPLES, e->chunk);
-    if (e->SetParam) e->SetParam(e->eci, eciSampleRate, 1);  /* 11025 Hz (Apple) */
-
-    char ver[64] = {0};
-    fn_Version Version = (fn_Version)dlsym(lib, "eciVersion");
-    if (Version) { Version(ver); LOGI("Eloquence engine %s ready (dialect=0x%x)", ver, dialect); }
+    const int defaults[]={0,50,65,30,0,0,50,92};memcpy(e->values,defaults,sizeof(defaults));e->dialect=dialect;
     return (jlong)(intptr_t)e;
 }
-
-JNIEXPORT jboolean JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeSetLanguage(JNIEnv *env, jclass c,
-        jlong handle, jint dialect) {
-    (void)env; (void)c;
-    Engine *e = (Engine *)(intptr_t)handle;
-    if (!e || !e->SetParam) return JNI_FALSE;
-    if (e->Stop) e->Stop(e->eci);
-    if (e->Synchronize) e->Synchronize(e->eci);
-    if (e->Speaking) {
-        int guard = 0;
-        while (e->Speaking(e->eci) && guard++ < 10000) usleep(1000);
-        if (e->Speaking(e->eci)) return JNI_FALSE;
+JNIEXPORT jboolean JNICALL Java_com_eloquence_tts_EloquenceNative_nativeSetLanguage(
+        JNIEnv *env,jclass clazz,jlong handle,jint dialect) {
+    (void)env;(void)clazz;Engine *e=(Engine*)(intptr_t)handle;
+    if(!e||!valid_dialect(dialect))return JNI_FALSE;e->dialect=dialect;return JNI_TRUE;
+}
+JNIEXPORT jboolean JNICALL Java_com_eloquence_tts_EloquenceNative_nativeSetVoice(
+        JNIEnv *env,jclass clazz,jlong handle,jintArray array) {
+    (void)clazz;Engine *e=(Engine*)(intptr_t)handle;
+    if(!e||!array||(*env)->GetArrayLength(env,array)!=8)return JNI_FALSE;
+    jint values[8];(*env)->GetIntArrayRegion(env,array,0,8,values);if((*env)->ExceptionCheck(env))return JNI_FALSE;
+    for(int i=0;i<8;++i)if(values[i]<0||values[i]>(i==0?1:i==6?250:100))return JNI_FALSE;
+    memcpy(e->values,values,sizeof(values));return JNI_TRUE;
+}
+static int send_all(int fd,const void *data,size_t size) {
+    const char *p=data;
+    while(size){ssize_t n=send(fd,p,size,MSG_NOSIGNAL);if(n<0&&errno==EINTR)continue;if(n<=0)return 0;p+=n;size-=n;}
+    return 1;
+}
+static int receive_all(int fd,void *data,size_t size) {
+    char *p=data;
+    while(size){ssize_t n=read(fd,p,size);if(n<0&&errno==EINTR)continue;if(n<=0)return 0;p+=n;size-=n;}
+    return 1;
+}
+JNIEXPORT jshortArray JNICALL Java_com_eloquence_tts_EloquenceNative_nativeSynthesize(
+        JNIEnv *env,jclass clazz,jlong handle,jbyteArray array) {
+    (void)clazz;Engine *e=(Engine*)(intptr_t)handle;if(!e||!array)return NULL;
+    jsize length=(*env)->GetArrayLength(env,array);if(length<=0||length>=16384)return NULL;
+    char *text=malloc((size_t)length);if(!text)return NULL;
+    (*env)->GetByteArrayRegion(env,array,0,length,(jbyte*)text);
+    if((*env)->ExceptionCheck(env)){free(text);return NULL;}
+    char path[4096],dialect[24],values[128],search[4128];
+    if(snprintf(path,sizeof(path),"%s/libeloquence_worker.so",e->libraries)>=(int)sizeof(path)){free(text);return NULL;}
+    snprintf(dialect,sizeof(dialect),"%d",e->dialect);
+    snprintf(values,sizeof(values),"%d,%d,%d,%d,%d,%d,%d,%d",e->values[0],e->values[1],e->values[2],e->values[3],e->values[4],e->values[5],e->values[6],e->values[7]);
+    snprintf(search,sizeof(search),"LD_LIBRARY_PATH=%s",e->libraries);
+    char *args[]={path,e->libraries,e->data,dialect,values,NULL};
+    size_t count=0;while(environ[count])++count;
+    char **child_env=calloc(count+2,sizeof(char*));if(!child_env){free(text);return NULL;}
+    size_t copied=0;int env_ok=1;
+    for(size_t i=0;i<count;++i)if(strncmp(environ[i],"LD_LIBRARY_PATH=",16)){
+        child_env[copied]=strdup(environ[i]);if(!child_env[copied]){env_ok=0;break;}++copied;
     }
-    /* Apple's SetParam can return -1 while changing dialect successfully.
-     * Upstream sd_eloquence deliberately uses this path: Delete+NewEx corrupts
-     * hooks on module reload. Preserve the live instance and its callbacks. */
-    int result = e->SetParam(e->eci, eciLanguageDialect, dialect);
-    typedef int (*fn_GetParam)(ECIHand, int);
-    fn_GetParam GetParam = (fn_GetParam)dlsym(e->lib, "eciGetParam");
-    LOGI("dialect request=0x%x result=%d reported=0x%x", dialect, result,
-         GetParam ? GetParam(e->eci, eciLanguageDialect) : 0);
-    return JNI_TRUE;
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeSetVoice(JNIEnv *env, jclass c,
-        jlong handle, jintArray parameters) {
-    (void)c;
-    Engine *e = (Engine *)(intptr_t)handle;
-    if (!e || !e->SetVoiceParam || !parameters ||
-        (*env)->GetArrayLength(env, parameters) != 8) return JNI_FALSE;
-    jint values[8];
-    (*env)->GetIntArrayRegion(env, parameters, 0, 8, values);
-    if ((*env)->ExceptionCheck(env)) return JNI_FALSE;
-    for (int i = 0; i < 8; ++i) {
-        int max = i == 0 ? 1 : (i == 6 ? 250 : 100);
-        if (values[i] < 0 || values[i] > max) return JNI_FALSE;
+    child_env[copied]=strdup(search);if(!child_env[copied])env_ok=0;else ++copied;
+    int sockets[2];
+    if(!env_ok||socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sockets)){
+        for(size_t i=0;i<copied;++i)free(child_env[i]);free(child_env);free(text);return NULL;
     }
-    LOGI("voice parameters=%d,%d,%d,%d,%d,%d,%d,%d", values[0], values[1],
-         values[2], values[3], values[4], values[5], values[6], values[7]);
-    for (int i = 0; i < 8; ++i)
-        if (e->SetVoiceParam(e->eci, 0, i, values[i]) < 0) {
-            LOGE("voice parameter %d rejected (value=%d)", i, values[i]);
-            return JNI_FALSE;
-        }
-    return JNI_TRUE;
-}
-
-/* Synthesize one utterance synchronously; return PCM as a short[] (11025 Hz,
- * mono, S16). Returns null on failure/abort. */
-JNIEXPORT jshortArray JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeSynthesize(JNIEnv *env, jclass c,
-        jlong handle, jbyteArray jText) {
-    (void)c;
-    Engine *e = (Engine *)(intptr_t)handle;
-    if (!e || !jText) return NULL;
-    jsize length = (*env)->GetArrayLength(env, jText);
-    char *text = (char *)malloc((size_t)length + 1);
-    if (!text) return NULL;
-    (*env)->GetByteArrayRegion(env, jText, 0, length, (jbyte *)text);
-    if ((*env)->ExceptionCheck(env)) { free(text); return NULL; }
-    text[length] = '\0';
-    LOGI("synthesis input bytes=%d", length);
-
-    e->pcm_len = 0;
-    e->abort = 0;
-    if (!e->AddText(e->eci, (ECIInputText)text) || !e->Synthesize(e->eci)) {
-        free(text); return NULL;
+    e->abort=0;pid_t child=fork();
+    if(child==0){
+        close(sockets[0]);
+        if(dup2(sockets[1],STDIN_FILENO)<0||dup2(sockets[1],STDOUT_FILENO)<0)_exit(125);
+        if(sockets[1]!=STDIN_FILENO&&sockets[1]!=STDOUT_FILENO)close(sockets[1]);
+        execve(path,args,child_env);_exit(126);
     }
-    if (e->Synchronize) e->Synchronize(e->eci);
-    /* Apple's Synchronize is non-blocking; drain the worker thread. */
-    if (e->Speaking) { int guard = 0; while (e->Speaking(e->eci) && !e->abort && guard++ < 100000) usleep(1000); }
-    free(text);
-
-    if (e->abort || e->pcm_len == 0) return NULL;
-    jshortArray out = (*env)->NewShortArray(env, (jsize)e->pcm_len);
-    if (out) (*env)->SetShortArrayRegion(env, out, 0, (jsize)e->pcm_len, e->pcm);
-    return out;
+    for(size_t i=0;i<copied;++i)free(child_env[i]);free(child_env);
+    close(sockets[1]);
+    if(child<0){close(sockets[0]);free(text);return NULL;}
+    e->child=child;
+    int ok=send_all(sockets[0],text,(size_t)length);free(text);shutdown(sockets[0],SHUT_WR);
+    uint32_t header[4];short *pcm=NULL;
+    if(ok)ok=receive_all(sockets[0],header,sizeof(header));
+    if(ok)ok=header[0]==0x31514c45&&header[1]==1&&header[2]==11025&&header[3]>0&&header[3]<=MAX_SAMPLES;
+    if(ok){pcm=malloc((size_t)header[3]*sizeof(short));ok=pcm&&receive_all(sockets[0],pcm,(size_t)header[3]*sizeof(short));}
+    close(sockets[0]);if(!ok)kill(child,SIGTERM);
+    int status=0;pid_t waited;do{waited=waitpid(child,&status,0);}while(waited<0&&errno==EINTR);e->child=0;
+    if(waited!=child||!WIFEXITED(status)||WEXITSTATUS(status)!=0||e->abort)ok=0;
+    jshortArray result=NULL;
+    if(ok){result=(*env)->NewShortArray(env,(jsize)header[3]);if(result)(*env)->SetShortArrayRegion(env,result,0,(jsize)header[3],pcm);}
+    else LOGE("renderer failed dialect=0x%x child_status=%d",e->dialect,status);
+    free(pcm);if(ok)LOGI("rendered dialect=0x%x samples=%u",e->dialect,header[3]);return result;
 }
-
-JNIEXPORT void JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeStop(JNIEnv *env, jclass c, jlong handle) {
-    (void)env; (void)c;
-    Engine *e = (Engine *)(intptr_t)handle;
-    if (!e) return;
-    e->abort = 1;
-    if (e->Stop) e->Stop(e->eci);
+JNIEXPORT void JNICALL Java_com_eloquence_tts_EloquenceNative_nativeStop(
+        JNIEnv *env,jclass clazz,jlong handle) {
+    (void)env;(void)clazz;Engine *e=(Engine*)(intptr_t)handle;if(!e)return;
+    e->abort=1;if(e->child>0)kill(e->child,SIGTERM);
 }
-
-JNIEXPORT void JNICALL
-Java_com_eloquence_tts_EloquenceNative_nativeShutdown(JNIEnv *env, jclass c, jlong handle) {
-    (void)env; (void)c;
-    Engine *e = (Engine *)(intptr_t)handle;
-    if (!e) return;
-    if (e->Delete) e->Delete(e->eci);
-    free(e->pcm);
-    /* Intentionally NOT dlclose(e->lib): the engine registers C++ atexit
-     * destructors referencing engine state; process exit runs them cleanly,
-     * an explicit dlclose can fire them in the wrong order. (Same rationale as
-     * examples/speak.c.) */
-    free(e);
+JNIEXPORT void JNICALL Java_com_eloquence_tts_EloquenceNative_nativeShutdown(
+        JNIEnv *env,jclass clazz,jlong handle) {
+    (void)env;(void)clazz;Engine *e=(Engine*)(intptr_t)handle;if(!e)return;
+    if(e->child>0){kill(e->child,SIGTERM);while(waitpid(e->child,NULL,0)<0&&errno==EINTR){}}
+    free(e->data);free(e->libraries);free(e);
 }

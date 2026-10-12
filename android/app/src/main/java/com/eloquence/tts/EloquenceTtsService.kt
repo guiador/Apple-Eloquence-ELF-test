@@ -203,7 +203,7 @@ class EloquenceTtsService : TextToSpeechService() {
             currentDialect = dialect
             return true
         }
-        handle = EloquenceNative.nativeInit(filesDir.absolutePath, dialect)
+        handle = EloquenceNative.nativeInit(filesDir.absolutePath, applicationInfo.nativeLibraryDir, dialect)
         if (handle == 0L) { Log.e(TAG, "nativeInit failed for dialect 0x%08x".format(dialect)); return false }
         currentDialect = dialect
         return true

@@ -26,7 +26,7 @@ android {
             abiFilters += "arm64-v8a"
         }
         externalNativeBuild {
-            cmake { arguments += "-DELOQUENCE_CJK_ATEXIT=ON" }
+            cmake { arguments += "-DELOQUENCE_CJK_ATEXIT=OFF" }
         }
     }
 
