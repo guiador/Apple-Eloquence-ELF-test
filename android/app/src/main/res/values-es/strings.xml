@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<resources>
+    <string name="app_name">Apple Eloquence pruebas</string>
+    <string name="engine_label">Apple Eloquence pruebas (ETI)</string>
+    <string name="activity_title">Apple Eloquence: voces y ajustes</string>
+    <string name="introduction">Elige una voz, ajusta sus parámetros y prueba la lectura. Los ajustes se guardan para cada idioma y perfil.</string>
+    <string name="language">Idioma</string>
+    <string name="voice_profile">Perfil de voz</string>
+    <string name="test_text">Texto de prueba</string>
+    <string name="read_text">Leer texto</string>
+    <string name="stop_reading">Detener lectura</string>
+    <string name="reading_stopped">Lectura detenida</string>
+    <string name="initializing">Inicializando el motor…</string>
+    <string name="reset_profile">Restablecer valores del perfil</string>
+    <string name="profile_reset">Valores originales del perfil restaurados</string>
+    <string name="open_system_settings">Abrir ajustes de texto a voz del sistema</string>
+    <string name="male">Masculino</string>
+    <string name="female">Femenino</string>
+    <string name="voice_gender">Género de la voz</string>
+    <string name="speed">Velocidad</string>
+    <string name="pitch">Tono</string>
+    <string name="voice_volume">Volumen de la voz</string>
+    <string name="head_size">Tamaño de cabeza (timbre)</string>
+    <string name="pitch_variation">Variación tonal</string>
+    <string name="roughness">Aspereza</string>
+    <string name="breathiness">Aire en la voz</string>
+    <string name="parameter_value">%1$s: %2$d de %3$d</string>
+    <string name="decrease_parameter">Disminuir %1$s</string>
+    <string name="increase_parameter">Aumentar %1$s</string>
+    <string name="parameter_announcement">%1$s: %2$d</string>
+    <string name="parameter_limits">Velocidad: 0 a 250. Otros parámetros: 0 a 100. Los valores extremos pueden sonar poco naturales. Las funciones avanzadas y los textos largos siguen en pruebas.</string>
+    <string name="engine_failed">No se pudo iniciar el motor</string>
+    <string name="reading">Leyendo</string>
+    <string name="reading_finished">Lectura terminada</string>
+    <string name="synthesis_failed">El motor no pudo sintetizar el texto o rechazó un parámetro</string>
+    <string name="engine_ready">Motor conectado. Elige una voz y pulsa Leer texto.</string>
+    <string name="enter_text">Escribe un texto</string>
+    <string name="profile_unavailable">Perfil no disponible</string>
+    <string name="reading_failed">No se pudo iniciar la lectura</string>
+    <string name="settings_failed">No se pudieron abrir los ajustes del sistema</string>
+    <string name="sample_text">El niño pidió café. Mañana hablará español. Pingüino, canción, árbol: á, é, í, ó, ú, ñ y ü.</string>
+</resources>

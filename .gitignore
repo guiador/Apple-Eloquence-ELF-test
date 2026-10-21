@@ -49,3 +49,22 @@ NVDA-IBMTTS-Driver/
 # below it that we don't want to track.
 docs/macho2elf-audit/**/*.tmp
 docs/macho2elf-audit/**/*.pyc
+
+# Mantenimiento 2026-10-20: datos locales y resultados regenerables
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+**/.gradle/
+**/local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/.codex-tools/

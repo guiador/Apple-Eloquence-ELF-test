@@ -13,8 +13,8 @@ android {
         applicationId = "com.eloquence.tts"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         ndk {
             // arm64-v8a only by default — it's the validated target (engine
@@ -26,7 +26,7 @@ android {
             abiFilters += "arm64-v8a"
         }
         externalNativeBuild {
-            cmake { arguments += "-DELOQUENCE_CJK_ATEXIT=ON" }
+            cmake { arguments += "-DELOQUENCE_CJK_ATEXIT=OFF" }
         }
     }
 
@@ -43,10 +43,18 @@ android {
     // executable code is permitted (writable app storage is not).
     packaging {
         // Keep the page-aligned engine libs uncompressed so they mmap directly.
-        jniLibs { useLegacyPackaging = false }
+        // The ECI engine opens language modules using physical Path= filenames.
+        // Extract them to nativeLibraryDir rather than leaving them only in the APK.
+        jniLibs { useLegacyPackaging = true }
     }
 
     buildTypes {
+        debug {
+            // Independently installable device-test variant; retains the earlier
+            // APK and the phone's chosen screen-reader engine during diagnosis.
+            applicationIdSuffix = ".pruebas"
+            versionNameSuffix = "-pruebas"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
@@ -62,4 +70,5 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    testImplementation("junit:junit:4.13.2")
 }

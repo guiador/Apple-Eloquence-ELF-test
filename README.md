@@ -188,3 +188,5 @@ convert locally; see `docs/01-extraction.md`.
 - Agner Fog (`objconv`) and the LIEF project, for the binary-format
   tooling that made this tractable.
 - Anthropic's Claude Code did most of the engineering pair-programming.
+
+[Continuidad, construcción y pendientes para otros mantenedores](CONTINUIDAD.md).
